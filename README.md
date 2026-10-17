@@ -6,7 +6,7 @@ Official information portal and administrative platform foundation for Gram Panc
 
 ## 1. Architecture Overview
 
-- **Backend Framework:** Python 3.11 & Django 5.1 (Monolith with Django Templates)
+- **Backend Framework:** Python 3.11 & Django 5.2 LTS (`Django==5.2.18`) (Monolith with Django Templates)
 - **Database Engine:** PostgreSQL 16 (`postgres:16-alpine`)
 - **Default Locale:** Marathi (`mr`), Timezone: `Asia/Kolkata`
 - **Isolation Boundary:**
