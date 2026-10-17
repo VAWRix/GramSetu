@@ -37,10 +37,10 @@ ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_str.split(',') if host.s
 
 
 # ------------------------------------------------------------------------------
-# Application Definition
+# Application Definition & Architectural Domains
 # ------------------------------------------------------------------------------
 
-INSTALLED_APPS = [
+DJANGO_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -48,6 +48,24 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 ]
+
+# 12 Domain Apps establishing clear architectural module boundaries
+LOCAL_APPS = [
+    'apps.core',            # Core infrastructure, health/readiness, error handlers
+    'apps.content',         # Future informational pages and content revision management
+    'apps.notices',         # Future announcements, notices, effective dates, and expiry
+    'apps.documents',       # Future document metadata, file access controls, disclosure
+    'apps.events',          # Future meetings and events
+    'apps.schemes',         # Future government schemes and official links
+    'apps.gallery',         # Future approved public photographs and media metadata
+    'apps.search',          # Future unified search across approved public information
+    'apps.audit',           # Future immutable application audit-event recording
+    'apps.governance',      # Future publishing approval and publication-state coordination
+    'apps.site_config',     # Future navigation, themes, homepage, public-site settings
+    'apps.identity',        # Future invitation-only CMS accounts, role permissions
+]
+
+INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -97,21 +115,26 @@ if IS_TESTING:
     ACTIVE_DB_USER = os.getenv('TEST_DB_USER', 'gramsetu_test_runner')
     ACTIVE_DB_PASSWORD = os.getenv('TEST_DB_PASSWORD')
     if not ACTIVE_DB_PASSWORD:
-        raise RuntimeError("Missing required environment variable: TEST_DB_PASSWORD")
+        raise RuntimeError("CRITICAL CONFIGURATION ERROR: 'TEST_DB_PASSWORD' environment variable is missing.")
 elif DB_ROLE == 'migrator':
     # Migration Mode: Connects to gramsetu_dev using gramsetu_migrator (schema owner)
     ACTIVE_DB_NAME = os.getenv('DEV_DB_NAME', 'gramsetu_dev')
     ACTIVE_DB_USER = os.getenv('MIGRATOR_DB_USER', 'gramsetu_migrator')
     ACTIVE_DB_PASSWORD = os.getenv('MIGRATOR_DB_PASSWORD')
     if not ACTIVE_DB_PASSWORD:
-        raise RuntimeError("Missing required environment variable: MIGRATOR_DB_PASSWORD")
-else:
+        raise RuntimeError("CRITICAL CONFIGURATION ERROR: 'MIGRATOR_DB_PASSWORD' environment variable is missing.")
+elif DB_ROLE == 'app':
     # Runtime Application Mode: Connects to gramsetu_dev using gramsetu_app (DML only)
     ACTIVE_DB_NAME = os.getenv('DEV_DB_NAME', 'gramsetu_dev')
     ACTIVE_DB_USER = os.getenv('APP_DB_USER', 'gramsetu_app')
     ACTIVE_DB_PASSWORD = os.getenv('APP_DB_PASSWORD')
     if not ACTIVE_DB_PASSWORD:
-        raise RuntimeError("Missing required environment variable: APP_DB_PASSWORD")
+        raise RuntimeError("CRITICAL CONFIGURATION ERROR: 'APP_DB_PASSWORD' environment variable is missing.")
+else:
+    raise RuntimeError(
+        f"CRITICAL CONFIGURATION ERROR: Invalid DB_ROLE '{DB_ROLE}'. "
+        f"Permitted values are 'app' (normal runtime) or 'migrator' (schema migrations)."
+    )
 
 DATABASES = {
     'default': {
@@ -129,6 +152,50 @@ DATABASES = {
 
 # Enforce custom test runner with active database verification
 TEST_RUNNER = 'config.test_runner.GramSetuTestRunner'
+
+
+# ------------------------------------------------------------------------------
+# Logging Conventions
+# ------------------------------------------------------------------------------
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} [{name}:{lineno}] {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'simple': {
+            'format': '{levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose' if DEBUG else 'simple',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'gramsetu': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+    },
+}
 
 
 # ------------------------------------------------------------------------------

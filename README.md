@@ -1,6 +1,6 @@
-# GramSetu — Project Foundation (Milestone 1)
+# GramSetu — Official Information Portal (Maharashtra, India)
 
-Official information portal and administrative platform foundation for Gram Panchayats in Maharashtra, India.
+Official information portal and administrative platform for Gram Panchayats in Maharashtra, India. Built with Python 3.11, Django 5.2 LTS, and PostgreSQL 16.
 
 ---
 
@@ -9,6 +9,7 @@ Official information portal and administrative platform foundation for Gram Panc
 - **Backend Framework:** Python 3.11 & Django 5.2 LTS (`Django==5.2.18`) (Monolith with Django Templates)
 - **Database Engine:** PostgreSQL 16 (`postgres:16-alpine`)
 - **Default Locale:** Marathi (`mr`), Timezone: `Asia/Kolkata`
+- **Application Structure:** 12 domain applications partitioned under `apps/` (Core, Content, Notices, Documents, Events, Schemes, Gallery, Search, Audit, Governance, Site Configuration, Identity). See [`docs/architecture.md`](docs/architecture.md) for full architectural specifications.
 - **Isolation Boundary:**
   - Dedicated Docker Compose service: `gramsetu-postgres`
   - Host Port Binding: `127.0.0.1:5433:5432` (strictly IPv4 loopback)
@@ -79,19 +80,22 @@ Tests automatically target `gramsetu_test` using `gramsetu_test_runner` and enfo
 python manage.py test
 ```
 
-### 4.4 Running Local Backups (Least-Privilege Backup Role)
+### 4.4 Checking Infrastructure Health Probes
+```powershell
+# Process Liveness Probe (does not touch external databases)
+curl http://127.0.0.1:8000/health/
+
+# Service Readiness Probe (verifies database connectivity)
+curl http://127.0.0.1:8000/ready/
+```
+
+### 4.5 Running Local Backups (Least-Privilege Backup Role)
 Executes a verified, consistent logical backup (`pg_dump -Fc`) to the host `backups/` directory:
 ```powershell
 python scripts/backup.py
 ```
-This utility:
-1. Streams custom-format backup non-interactively to a `.tmp` file.
-2. Validates exit status and minimum file size (> 1KB).
-3. Verifies archive Table of Contents structure via `pg_restore --list`.
-4. Computes SHA-256 cryptographic digest.
-5. Atomically commits the backup file (`.dump`) and writes `<filename>.dump.sha256`.
 
-### 4.5 Stopping the Database Service
+### 4.6 Stopping the Database Service
 ```powershell
 # Gracefully stop containers without touching persistent volume
 docker compose down
