@@ -1,0 +1,42 @@
+services:
+  gramsetu-postgres:
+    container_name: gramsetu-postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_USER: ${BOOTSTRAP_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${BOOTSTRAP_DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      DEV_DB_NAME: ${DEV_DB_NAME:-gramsetu_dev}
+      TEST_DB_NAME: ${TEST_DB_NAME:-gramsetu_test}
+      APP_DB_USER: ${APP_DB_USER:-gramsetu_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      MIGRATOR_DB_USER: ${MIGRATOR_DB_USER:-gramsetu_migrator}
+      MIGRATOR_DB_PASSWORD: ${MIGRATOR_DB_PASSWORD}
+      TEST_DB_USER: ${TEST_DB_USER:-gramsetu_test_runner}
+      TEST_DB_PASSWORD: ${TEST_DB_PASSWORD}
+      BACKUP_DB_USER: ${BACKUP_DB_USER:-gramsetu_backup}
+      BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD}
+    volumes:
+      - gramsetu_pgdata:/var/lib/postgresql/data
+      - ./docker/init-db:/docker-entrypoint-initdb.d:ro
+      - ./backups:/var/backups/postgres:rw
+    networks:
+      - gramsetu-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BOOTSTRAP_DB_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  gramsetu_pgdata:
+    name: gramsetu_pgdata
+
+networks:
+  gramsetu-net:
+    name: gramsetu-net
+    driver: bridge

@@ -1,0 +1,11 @@
+# Preserve LF line endings for shell scripts and Docker files
+*.sh text eol=lf
+Dockerfile* text eol=lf
+
+# Default text files
+*.py text
+*.yml text
+*.yaml text
+*.md text
+*.txt text
+*.example text
