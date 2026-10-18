@@ -67,9 +67,10 @@ C:\dev\GramSetu\
 │   └── wsgi.py
 ├── apps/                                   # Domain applications package
 │   ├── __init__.py
-│   ├── core/                               # Core infrastructure, health probes, errors
+│   ├── core/                               # Core infrastructure, health probes, utilities
 │   │   ├── __init__.py
 │   │   ├── apps.py                         # CoreConfig ('apps.core')
+│   │   ├── utils.py                        # RFC 9562 UUIDv7 generator
 │   │   ├── views.py                        # Health, readiness, error handlers
 │   │   ├── urls.py                         # Infrastructure routing (/health/, /ready/)
 │   │   └── tests.py                        # Architectural & operational unit tests
@@ -82,8 +83,14 @@ C:\dev\GramSetu\
 │   ├── search/                             # Future unified search across public data
 │   ├── audit/                              # Future immutable audit trail
 │   ├── governance/                         # Future approval states & publication workflows
-│   ├── site_config/                        # Future navigation & site settings
-│   └── identity/                           # Future invitation-only accounts & RBAC
+│   ├── site_config/                        # Site configuration, singleton profile, emergency banners
+│   │   ├── migrations/                     # 0001_initial (PanchayatProfile, SiteNavigation, EmergencyBanner)
+│   │   ├── models.py                       # Singleton PanchayatProfile, multilingual nav & banners
+│   │   └── tests.py                        # Site configuration unit tests
+│   └── identity/                           # User identity, RBAC, invitations, urgent authorizations
+│       ├── migrations/                     # 0001_initial (User, RoleAssignment, InvitationToken, OperatorUrgentAuthorization)
+│       ├── models.py                       # Custom User (UUIDv7, email username), RBAC, tokens
+│       └── tests.py                        # Identity unit tests
 ├── docker/
 │   └── init-db/
 │       └── 01-init-databases-and-roles.sh  # PostgreSQL container initialization
@@ -108,11 +115,11 @@ C:\dev\GramSetu\
 > [!IMPORTANT]
 > **Data Model & Publishing Workflow Design Specification:**  
 > A comprehensive, implementation-ready domain model and governance specification is established in [`docs/data-model.md`](data-model.md) alongside the Architecture Decision Records in [`docs/decisions/`](decisions/).  
-> **Explicit Boundary Note:** [`docs/data-model.md`](data-model.md) is an **architectural design document, not an implemented database schema**. In strict accordance with Milestone 3 constraints, no Django models, migrations, database tables, or business features have been created. The domain apps below remain clean architectural skeletons awaiting explicit authorization for model implementation in future milestones.
+> **Milestone 4A Status:** Foundational identity and site configuration models have been implemented in `apps/identity` and `apps/site_config` with initial migrations and unit tests. Pending explicit authorization to remediate pre-existing empty auth migrations in `gramsetu_dev`, these migrations are staged and unapplied to the active database. The remaining domain apps remain clean architectural skeletons.
 
 | App Module | Package Name | Verbose Name (Bilingual) | Current Implementation Status | Future Planned Responsibility |
 | :--- | :--- | :--- | :--- | :--- |
-| **`core`** | `apps.core` | Core / मुख्य | **Implemented** (Probes, Error Views, Tests) | Shared utilities, health/readiness endpoints, baseline error handlers, base templates. |
+| **`core`** | `apps.core` | Core / मुख्य | **Implemented** (Probes, Error Views, UUIDv7 Utils, Tests) | Shared utilities, health/readiness endpoints, baseline error handlers, base templates. |
 | **`content`** | `apps.content` | Content / मजकूर | **Skeleton Only** (`AppConfig`) | Public informational pages (About Panchayat, Village Profile, History), rich-text revisions. |
 | **`notices`** | `apps.notices` | Notices / सूचना | **Skeleton Only** (`AppConfig`) | Official announcements, tender notices, statutory notices, publication and expiry dates. |
 | **`documents`** | `apps.documents` | Documents / कागदपत्रे | **Skeleton Only** (`AppConfig`) | Document metadata, meeting minutes, resolution PDFs, disclosure controls. |
@@ -122,8 +129,8 @@ C:\dev\GramSetu\
 | **`search`** | `apps.search` | Search / शोध | **Skeleton Only** (`AppConfig`) | Unified search indexing across notices, schemes, resolutions, and pages. |
 | **`audit`** | `apps.audit` | Audit / लेखापरीक्षण | **Skeleton Only** (`AppConfig`) | Immutable recording of administrative actions (logins, uploads, approvals, status changes). |
 | **`governance`**| `apps.governance` | Governance / शासन | **Skeleton Only** (`AppConfig`) | Publication state machine (`draft` -> `pending_approval` -> `published`), sign-offs. |
-| **`site_config`**| `apps.site_config` | Site Configuration / संकेतस्थळ संरचना | **Skeleton Only** (`AppConfig`) | Header/footer navigation, theme toggle, emergency banners, official contacts. |
-| **`identity`** | `apps.identity` | Identity / ओळख | **Skeleton Only** (`AppConfig`) | Invitation-only CMS user accounts, email OTP MFA, operator permissions. |
+| **`site_config`**| `apps.site_config` | Site Configuration / संकेतस्थळ संरचना | **Implemented** (Milestone 4A: Models, Migrations, Tests) | Header/footer navigation, theme toggle, emergency banners, official contacts. |
+| **`identity`** | `apps.identity` | Identity / ओळख | **Implemented** (Milestone 4A: Models, Migrations, Tests) | Invitation-only CMS user accounts, email OTP MFA, operator permissions. |
 
 ---
 
