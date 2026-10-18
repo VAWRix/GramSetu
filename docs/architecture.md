@@ -88,7 +88,15 @@ C:\dev\GramSetu\
 │   └── init-db/
 │       └── 01-init-databases-and-roles.sh  # PostgreSQL container initialization
 ├── docs/
-│   └── architecture.md                     # This document
+│   ├── architecture.md                     # This document
+│   ├── data-model.md                       # Data model & publishing workflow design specification
+│   └── decisions/                          # Architecture Decision Records (ADRs 0001-0006)
+│       ├── 0001-multilingual-content-representation.md
+│       ├── 0002-immutable-revisions-and-approvals.md
+│       ├── 0003-publication-history-and-rollback.md
+│       ├── 0004-document-versioning-and-disclosure-approval.md
+│       ├── 0005-audit-record-immutability-and-protection.md
+│       └── 0006-integrity-guarantees-database-vs-application.md
 └── scripts/
     └── backup.py                           # Verified logical backup utility
 ```
@@ -97,8 +105,10 @@ C:\dev\GramSetu\
 
 ## 3. Domain Module Responsibilities & Implementation Status
 
-> [!NOTE]
-> In this milestone (Milestone 2), **only the architectural skeletons and `AppConfig` declarations have been established**. Speculative database models, migrations, forms, and business logic remain deliberately unimplemented until authorized in future milestones.
+> [!IMPORTANT]
+> **Data Model & Publishing Workflow Design Specification:**  
+> A comprehensive, implementation-ready domain model and governance specification is established in [`docs/data-model.md`](data-model.md) alongside the Architecture Decision Records in [`docs/decisions/`](decisions/).  
+> **Explicit Boundary Note:** [`docs/data-model.md`](data-model.md) is an **architectural design document, not an implemented database schema**. In strict accordance with Milestone 3 constraints, no Django models, migrations, database tables, or business features have been created. The domain apps below remain clean architectural skeletons awaiting explicit authorization for model implementation in future milestones.
 
 | App Module | Package Name | Verbose Name (Bilingual) | Current Implementation Status | Future Planned Responsibility |
 | :--- | :--- | :--- | :--- | :--- |

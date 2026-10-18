@@ -10,6 +10,7 @@ Official information portal and administrative platform for Gram Panchayats in M
 - **Database Engine:** PostgreSQL 16 (`postgres:16-alpine`)
 - **Default Locale:** Marathi (`mr`), Timezone: `Asia/Kolkata`
 - **Application Structure:** 12 domain applications partitioned under `apps/` (Core, Content, Notices, Documents, Events, Schemes, Gallery, Search, Audit, Governance, Site Configuration, Identity). See [`docs/architecture.md`](docs/architecture.md) for full architectural specifications.
+- **Data Model & Publishing Workflow Design:** Comprehensive domain entity schemas, state machines, and architecture decisions are documented in [`docs/data-model.md`](docs/data-model.md) and [`docs/decisions/`](docs/decisions/). Note: this is a design specification; database models remain unimplemented until future milestones.
 - **Isolation Boundary:**
   - Dedicated Docker Compose service: `gramsetu-postgres`
   - Host Port Binding: `127.0.0.1:5433:5432` (strictly IPv4 loopback)
