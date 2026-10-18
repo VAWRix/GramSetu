@@ -90,4 +90,4 @@ We must decide on the architectural pattern for representing multilingual conten
 ## 6. Implementation Notes for Future Milestones
 - In Django, translation models must use `select_related('parent')` for view lookups.
 - Slugs in Devanagari (Marathi and Hindi) must support full UTF-8 Unicode characters via `allow_unicode=True` on `SlugField`.
-- The default ordering for Marathi content should leverage PostgreSQL ICU collation (`COLLATE "mr-IN-x-icu"` or standard C.UTF-8) where alphabetical listing of Marathi titles is required.
+- The default ordering for Marathi content should leverage PostgreSQL ICU collation (`COLLATE "mr-IN-x-icu"`) where alphabetical listing of Marathi titles is required. Note: `mr-IN-x-icu` has been verified to exist in the project's local Docker `postgres:16-alpine` container, but on alternative production hosting environments lacking ICU library support, it must be created explicitly via `CREATE COLLATION` or fall back to standard `C.UTF-8`.

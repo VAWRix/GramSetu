@@ -1,9 +1,9 @@
 # GramSetu — Data Model & Publishing Workflow Specification
 
-> **Architectural Specification — Milestone 3 Design Document**  
+> **Architectural Specification — Milestone 3.1 Design Verification & Corrections**  
 > *Target System:* Django 5.2 LTS Monolith with PostgreSQL 16 on Docker  
 > *Domain Context:* Official Gram Panchayat Information Portal (Maharashtra, India)  
-> *Status:* Reviewed & Approved Design Specification (Not an implemented database schema)
+> *Status:* Reviewed & Verified Design Specification (Design Document — Not an implemented database schema)
 
 ---
 
@@ -11,6 +11,10 @@
 1. [Domain Overview & Architecture Principles](#1-domain-overview--architecture-principles)
 2. [Multilingual Content Architecture](#2-multilingual-content-architecture)
 3. [Editorial Revision & Governance State Machines](#3-editorial-revision--governance-state-machines)
+   - 3.1 [Editorial Revision State Machine](#31-editorial-revision-state-machine)
+   - 3.2 [Public Publication Lifecycle State Machine](#32-public-publication-lifecycle-state-machine)
+   - 3.3 [The Unified Source of Truth for Public Availability](#33-the-unified-source-of-truth-for-public-availability)
+   - 3.4 [Resolution of the 8 Scheduling & Publication Invariants](#34-resolution-of-the-8-scheduling--publication-invariants)
 4. [Domain Entity Specifications](#4-domain-entity-specifications)
    - 4.1 [Identity & Access Control (`apps.identity`)](#41-identity--access-control-appsidentity)
    - 4.2 [Site Configuration & Panchayat Profile (`apps.site_config`)](#42-site-configuration--panchayat-profile-appssite_config)
@@ -22,11 +26,11 @@
    - 4.8 [Welfare Schemes & Public Links (`apps.schemes`)](#48-welfare-schemes--public-links-appsschemes)
    - 4.9 [Approved Media Gallery (`apps.gallery`)](#49-approved-media-gallery-appsgallery)
    - 4.10 [Unified Public Search Index (`apps.search`)](#410-unified-public-search-index-appssearch)
-   - 4.11 [Immutable Audit Logging (`apps.audit`)](#411-immutable-audit-logging-appsaudit)
+   - 4.11 [Immutable Audit Logging & 5-Layer Threat Model (`apps.audit`)](#411-immutable-audit-logging--5-layer-threat-model-appsaudit)
 5. [Entity-Relationship Diagram (ERD)](#5-entity-relationship-diagram-erd)
 6. [Notice Lifecycle & Urgent Publication Workflow](#6-notice-lifecycle--urgent-publication-workflow)
-7. [Document Versioning, Storage, & Disclosure Architecture](#7-document-versioning-storage--disclosure-architecture)
-8. [PostgreSQL Integrity Constraints & Indexing Strategy](#8-postgresql-integrity-constraints--indexing-strategy)
+7. [Document Versioning, Storage, & Abstract Security Delivery Contract](#7-document-versioning-storage--abstract-security-delivery-contract)
+8. [PostgreSQL Integrity Constraints, Python Compatibility, & Indexing Strategy](#8-postgresql-integrity-constraints-python-compatibility--indexing-strategy)
 9. [Concurrency Controls & Transaction Safeguards](#9-concurrency-controls--transaction-safeguards)
 10. [Data Retention, Archival, & Deletion Policies](#10-data-retention-archival--deletion-policies)
 11. [MVP vs. Deferred Entities](#11-mvp-vs-deferred-entities)
@@ -63,7 +67,7 @@ Rather than storing multilingual fields in serialized JSON columns or wide horiz
 ### 2.2 Independent Governance per Language
 - **Independent Approval:** An administrator may approve and publish a Marathi notice immediately upon drafting. The Hindi translation can be drafted, reviewed, and published days later without modifying the Marathi record.
 - **Independent Rollback & Withdrawal:** Withdrawing an English translation due to a translation inaccuracy leaves the official Marathi publication active.
-- **Devanagari Unicode & Collation:** All text columns use PostgreSQL UTF-8 character encoding with Devanagari Unicode support. Slugs support Devanagari script via Django `allow_unicode=True`. Collation for Marathi sorting is specified as `COLLATE "mr-IN-x-icu"` where alphabetical Devanagari sorting is required.
+- **Devanagari Unicode & Collation:** All text columns use PostgreSQL UTF-8 character encoding with Devanagari Unicode support. Slugs support Devanagari script via Django `allow_unicode=True`. Collation for Marathi sorting leverages PostgreSQL ICU collation (`COLLATE "mr-IN-x-icu"`), which is verified present in the local `postgres:16-alpine` container. On alternative hosting environments lacking ICU support, the explicit fallback is standard `C.UTF-8` or generic default collation.
 
 ### 2.3 Citizen Fallback & Availability Signaling
 - When a citizen requests an English URL (e.g., `/en/notices/gram-sabha-oct-2026/`) and no approved English translation exists, the system does **not** leak unapproved drafts or emit a generic 404/500 error.
@@ -122,6 +126,58 @@ stateDiagram-v2
     Archived --> [*]: Permanent historical archive
 ```
 
+### 3.3 The Unified Source of Truth for Public Availability
+To eliminate ambiguities across background jobs, web requests, and cache layers, GramSetu defines a single canonical rule:
+
+**A revision is publicly accessible if and only if all seven of these conditions are simultaneously met:**
+1. **Active Container:** The root logical container (e.g. `Notice`, `Page`, `Document`) exists and has not been soft-deleted.
+2. **Matching Language Translation:** A child translation record exists for the requested language code (`language_code IN ('mr', 'hi', 'en')`).
+3. **Approved Editorial State:** The translation's `current_approved_revision_id` is NOT NULL and references a `Revision` record whose `editorial_status == 'approved'`.
+4. **Active Public Lifecycle Status:** The translation record's lifecycle status satisfies:
+   - For active pages/notices: `status IN ('published', 'scheduled')`.
+   - For historical notices: `status = 'archived'` ONLY IF `PanchayatProfile.show_archived_notices_publicly == True`.
+   - If `status == 'withdrawn'`, public access is strictly severed (`404 Not Found`).
+5. **Effective Start Window Reached:** The effective start timestamp satisfies `effective_from <= NOW()`.
+6. **Unexpired Window:** The expiration timestamp is either unconstrained or in the future: `expires_at IS NULL OR expires_at > NOW()`.
+7. **No Active Superseding Withdrawal:** The most recent `PublicationEvent` associated with this translation record is NOT of type `withdrawal`.
+
+#### Canonical SQL Query
+All public views enforce this invariant declaratively in SQL:
+```sql
+SELECT t.*, r.*
+FROM notices_noticetranslation t
+JOIN notices_notice n ON t.notice_id = n.id
+JOIN notices_noticerevision r ON t.current_approved_revision_id = r.id
+WHERE t.language_code = :requested_lang
+  AND r.editorial_status = 'approved'
+  AND (
+      (t.status = 'published' AND t.effective_from <= NOW() AND (n.expires_at IS NULL OR n.expires_at > NOW()))
+      OR
+      (t.status = 'scheduled' AND t.effective_from <= NOW() AND (n.expires_at IS NULL OR n.expires_at > NOW()))
+      OR
+      (t.status = 'archived' AND :allow_public_archives = TRUE)
+  );
+```
+
+### 3.4 Resolution of the 8 Scheduling & Publication Invariants
+
+1. **What exact conditions make a revision eligible for public access?**  
+   The 7 conditions specified in Section 3.3 must all be satisfied.
+2. **Does an approved revision become public automatically, or only after a publication event?**  
+   **Only after an explicit publication event.** Approval (`ApprovalRecord`) merely validates editorial correctness; public visibility requires an explicit `PublicationEvent` (created immediately or scheduled).
+3. **How does scheduled publication work if a background job runs late or fails?**  
+   **Declarative Query-Time Fallback:** Public availability is evaluated at SQL query time (`(status = 'published' OR (status = 'scheduled' AND effective_from <= NOW()))`). Even if Celery/cron workers crash or fail to execute, content becomes visible to citizens the instant `effective_from` passes. Background workers merely perform an idempotent index sweep to flip the status enum.
+4. **Can a scheduled item be withdrawn or superseded before its scheduled time?**  
+   **Yes.** Super Administrators can cancel or withdraw a scheduled publication at any time before its `effective_from`. Setting `status = 'withdrawn'` and inserting a `PublicationEvent(event_type='withdrawal')` immediately blocks publication. A subsequent scheduled event references `superseded_event_id` to replace the earlier schedule cleanly.
+5. **How are concurrent publish, withdraw, rollback, and expiry operations serialized?**  
+   **Pessimistic Row-Level Locking:** All lifecycle mutations on a translation row must execute within `transaction.atomic()` using `SELECT ... FOR UPDATE` on the translation row. Concurrent transactions wait for the lock and re-evaluate state preconditions, preventing race conditions.
+6. **How does the system prevent a stale job from republishing a withdrawn or superseded revision?**  
+   Scheduled job update queries verify both `status = 'scheduled'` AND `current_publication_event_id = :scheduled_event_id`. If an administrator withdrew or superseded the notice while the job was in the worker queue, the query matches 0 rows and exits as a safe no-op.
+7. **How is the public response kept consistent with the publication state?**  
+   Every state change flushes corresponding HTTP and application cache tags immediately. Response cache headers dynamically set `max-age` bounded by the seconds remaining until the next scheduled `effective_from` or `expires_at`.
+8. **What happens when an approved replacement exists but has not yet been published?**  
+   **Live Content Remains Completely Stable:** The translation record's `current_approved_revision_id` continues pointing to the live revision (e.g. Revision 1). The newly approved Revision 2 remains unreferenced on the public translation row until an explicit publication event takes effect.
+
 ---
 
 ## 4. Domain Entity Specifications
@@ -133,9 +189,9 @@ GramSetu operates strictly on an **invitation-only** administrative model with t
 #### `User`
 Custom user model replacing default Django user, using verified email as unique username.
 - **Table Name:** `identity_user`
-- **Primary Key:** `UUIDv7`
+- **Primary Key:** `UUID` (Generated via RFC 9562-compliant UUIDv7 utility or standard UUIDv4 fallback)
 - **Fields:**
-  - `id`: `UUIDField(primary_key=True, default=uuid7, editable=False)`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7, editable=False)`
   - `email`: `EmailField(unique=True, db_index=True)`
   - `full_name`: `CharField(max_length=255)`
   - `phone_number`: `CharField(max_length=15, blank=True)`
@@ -164,7 +220,7 @@ Maps administrative users to one of the two authorized system roles.
 Time-limited, single-use cryptographically random invitation tokens generated by Super Administrators to onboard new staff.
 - **Table Name:** `identity_invitation_token`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `email`: `EmailField()`
   - `target_role`: `CharField(max_length=20, choices=[('super_admin', 'Super Administrator'), ('operator', 'Operator')])`
   - `token_hash`: `CharField(max_length=64, unique=True)` (SHA-256 hash of plaintext invitation URL token)
@@ -177,7 +233,7 @@ Time-limited, single-use cryptographically random invitation tokens generated by
   - `CONSTRAINT check_token_validity CHECK (expires_at > created_at)`
 
 #### `OperatorUrgentAuthorization`
-Granular authority granted by a Super Administrator allowing an Operator to publish urgent notices without prior review for designated disaster or public safety categories.
+Granular authority granted exclusively by a Super Administrator allowing a specific Operator to publish urgent notices without prior review for designated disaster or public safety categories.
 - **Table Name:** `identity_operator_urgent_authorization`
 - **Fields:**
   - `id`: `BigAutoField(primary_key=True)`
@@ -188,7 +244,10 @@ Granular authority granted by a Super Administrator allowing an Operator to publ
   - `valid_to`: `DateTimeField()`
   - `is_revoked`: `BooleanField(default=False)`
   - `created_at`: `DateTimeField(auto_now_add=True)`
-- **Constraints:**
+- **Constraints & Security Safeguards:**
+  - **Self-Grant Prevention:** Operators **cannot** create or grant authorizations to themselves; view permissions restrict authorization creation strictly to Super Administrators.
+  - **Time-Limited:** Maximum validity period is capped at 30 days per authorization grant (`valid_to <= valid_from + INTERVAL '30 days'`).
+  - **Revocable:** Super Administrators can revoke an authorization at any time (`is_revoked = True`).
   - `CONSTRAINT check_auth_dates CHECK (valid_to > valid_from)`
   - Partial Unique Index: `UNIQUE (operator, allowed_category) WHERE (is_revoked = FALSE)`
 
@@ -251,13 +310,13 @@ Multilingual copy for the emergency banner.
 
 ### 4.3 Governance & Approval Workflows (`apps.governance`)
 
-This application serves as the authoritative audit ledger for all editorial approvals, rejections, publications, withdrawals, and rollbacks across all content apps.
+Authoritative audit ledger for all editorial approvals, rejections, publications, withdrawals, and rollbacks across all content apps.
 
 #### `ApprovalRecord`
 Formal sign-off by a Super Administrator binding to an exact, immutable content revision.
 - **Table Name:** `governance_approval_record`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `target_content_type`: `CharField(max_length=100)` (e.g., `noticetranslation`, `pagetranslation`, `documentversion`)
   - `target_id`: `UUIDField()`
   - `revision_id`: `UUIDField()` (Foreign pointer to the specific approved revision row)
@@ -271,7 +330,7 @@ Formal sign-off by a Super Administrator binding to an exact, immutable content 
 Mandatory administrative record when a submitted revision is rejected by a Super Administrator.
 - **Table Name:** `governance_rejection_record`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `target_content_type`: `CharField(max_length=100)`
   - `target_id`: `UUIDField()`
   - `revision_id`: `UUIDField()`
@@ -285,7 +344,7 @@ Mandatory administrative record when a submitted revision is rejected by a Super
 Append-only historical ledger capturing every change in public visibility.
 - **Table Name:** `governance_publication_event`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `target_content_type`: `CharField(max_length=100)`
   - `target_id`: `UUIDField()`
   - `revision_id`: `UUIDField()` (The revision made live by this event)
@@ -310,7 +369,7 @@ Manages public informational pages (e.g. About Panchayat, Village History, Elect
 #### `Page` (Logical Anchor)
 - **Table Name:** `content_page`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `slug`: `SlugField(max_length=100, unique=True, allow_unicode=False)` (Language-neutral system key, e.g. `about-panchayat`, `village-history`)
   - `is_system_page`: `BooleanField(default=False)` (If `True`, cannot be deleted)
   - `display_order`: `PositiveIntegerField(default=0)`
@@ -319,7 +378,7 @@ Manages public informational pages (e.g. About Panchayat, Village History, Elect
 #### `PageTranslation`
 - **Table Name:** `content_page_translation`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `page`: `ForeignKey(Page, on_delete=CASCADE, related_name='translations')`
   - `language_code`: `CharField(max_length=5, choices=[('mr', 'Marathi'), ('hi', 'Hindi'), ('en', 'English')])`
   - `localized_slug`: `SlugField(max_length=150, allow_unicode=True)` (Devanagari-capable slug)
@@ -336,7 +395,7 @@ Manages public informational pages (e.g. About Panchayat, Village History, Elect
 #### `PageRevision` (Immutable Content Row)
 - **Table Name:** `content_page_revision`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `translation`: `ForeignKey(PageTranslation, on_delete=CASCADE, related_name='revisions')`
   - `revision_number`: `PositiveIntegerField()`
   - `title`: `CharField(max_length=255)`
@@ -359,7 +418,7 @@ Official announcements, statutory tender notifications, public health alerts, an
 #### `Notice` (Logical Anchor)
 - **Table Name:** `notices_notice`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `notice_type`: `CharField(max_length=30, choices=[('general', 'General Notice'), ('tender', 'Tender Notice'), ('statutory', 'Statutory / Legal Notice'), ('gram_sabha', 'Gram Sabha Announcement'), ('emergency_alert', 'Emergency Public Alert')])`
   - `urgency`: `CharField(max_length=20, default='standard', choices=[('standard', 'Standard Urgency'), ('urgent', 'Urgent / Priority')])`
   - `is_urgent_published`: `BooleanField(default=False)`
@@ -372,7 +431,7 @@ Official announcements, statutory tender notifications, public health alerts, an
 #### `NoticeTranslation`
 - **Table Name:** `notices_notice_translation`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `notice`: `ForeignKey(Notice, on_delete=CASCADE, related_name='translations')`
   - `language_code`: `CharField(max_length=5, choices=[('mr', 'Marathi'), ('hi', 'Hindi'), ('en', 'English')])`
   - `slug`: `SlugField(max_length=200, allow_unicode=True)`
@@ -389,7 +448,7 @@ Official announcements, statutory tender notifications, public health alerts, an
 #### `NoticeRevision` (Immutable Content Row)
 - **Table Name:** `notices_notice_revision`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `translation`: `ForeignKey(NoticeTranslation, on_delete=CASCADE, related_name='revisions')`
   - `revision_number`: `PositiveIntegerField()`
   - `title`: `CharField(max_length=300)`
@@ -411,7 +470,7 @@ Detailed operational record when an authorized Operator publishes an urgent noti
   - `notice`: `ForeignKey(Notice, on_delete=PROTECT, related_name='urgent_logs')`
   - `operator`: `ForeignKey(User, on_delete=PROTECT, related_name='urgent_notices_published')`
   - `urgent_authorization`: `ForeignKey(OperatorUrgentAuthorization, on_delete=PROTECT)`
-  - `justification`: `TextField()`
+  - `justification`: `TextField()` (Mandatory rationale explaining the emergency, min 15 chars)
   - `published_at`: `DateTimeField(auto_now_add=True)`
   - `ratified_by`: `ForeignKey(User, null=True, blank=True, on_delete=PROTECT, related_name='ratified_urgent_notices')`
   - `ratified_at`: `DateTimeField(null=True, blank=True)`
@@ -429,7 +488,7 @@ Public documents, meeting minutes, resolution PDFs, budget statements, and tende
 #### `Document` (Logical Anchor)
 - **Table Name:** `documents_document`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `category`: `CharField(max_length=30, choices=[('resolution', 'Gram Sabha Resolution'), ('tender', 'Tender Document'), ('budget', 'Annual Budget / Audit Report'), ('citizen_charter', 'Citizen Charter / Form'), ('statutory_report', 'Statutory / Administrative Report')])`
   - `reference_number`: `CharField(max_length=100, blank=True, db_index=True)` (Official file/dispatch number)
   - `issuing_department`: `CharField(max_length=150)`
@@ -440,7 +499,7 @@ Public documents, meeting minutes, resolution PDFs, budget statements, and tende
 #### `DocumentTranslation`
 - **Table Name:** `documents_document_translation`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `document`: `ForeignKey(Document, on_delete=CASCADE, related_name='translations')`
   - `language_code`: `CharField(max_length=5, choices=[('mr', 'Marathi'), ('hi', 'Hindi'), ('en', 'English')])`
   - `title`: `CharField(max_length=300)`
@@ -456,7 +515,7 @@ Public documents, meeting minutes, resolution PDFs, budget statements, and tende
 #### `DocumentVersion` (Physical Binary & Disclosure Metadata)
 - **Table Name:** `documents_document_version`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `translation`: `ForeignKey(DocumentTranslation, on_delete=CASCADE, related_name='versions')`
   - `version_number`: `PositiveIntegerField()`
   - `storage_path`: `CharField(max_length=500, unique=True)` (Internal private storage path on disk)
@@ -481,7 +540,7 @@ Public meetings, Gram Sabha dates, health camps, and administrative hearings.
 #### `PanchayatEvent` (Logical Anchor)
 - **Table Name:** `events_event`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `event_type`: `CharField(max_length=30, choices=[('gram_sabha', 'Gram Sabha Meeting'), ('ward_meeting', 'Ward Sabha Meeting'), ('health_camp', 'Public Health / Vaccination Camp'), ('hearing', 'Administrative Grievance Hearing'), ('cultural', 'National / Cultural Event')])`
   - `start_datetime`: `DateTimeField()`
   - `end_datetime`: `DateTimeField()`
@@ -514,7 +573,7 @@ State and Central government schemes, eligibility criteria, application steps, a
 #### `WelfareScheme` (Logical Anchor)
 - **Table Name:** `schemes_welfare_scheme`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `scheme_level`: `CharField(max_length=20, choices=[('central', 'Central Government'), ('state', 'Maharashtra State Government'), ('district', 'Zilla Parishad / District')])`
   - `target_beneficiary`: `CharField(max_length=50, choices=[('farmers', 'Farmers / Agriculture'), ('women', 'Women & Child Welfare'), ('youth', 'Youth & Education'), ('senior_citizens', 'Senior Citizens'), ('general', 'General Public')])`
   - `official_portal_url`: `URLField(max_length=500)`
@@ -546,7 +605,7 @@ Approved photographs of public infrastructure, development works, Gram Sabha pro
 #### `GalleryAlbum` (Logical Anchor)
 - **Table Name:** `gallery_album`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `event_date`: `DateField(null=True, blank=True)`
   - `is_published`: `BooleanField(default=False)`
   - `created_at`: `DateTimeField(auto_now_add=True)`
@@ -567,7 +626,7 @@ Approved photographs of public infrastructure, development works, Gram Sabha pro
 Individual approved photographs within an album.
 - **Table Name:** `gallery_item`
 - **Fields:**
-  - `id`: `UUIDv7`
+  - `id`: `UUIDField(primary_key=True, default=generate_uuid7)`
   - `album`: `ForeignKey(GalleryAlbum, on_delete=CASCADE, related_name='items')`
   - `storage_path`: `CharField(max_length=500)`
   - `file_size_bytes`: `IntegerField()`
@@ -608,7 +667,7 @@ Denormalized search projection table optimized for fast public search across all
 
 ---
 
-### 4.11 Immutable Audit Logging (`apps.audit`)
+### 4.11 Immutable Audit Logging & 5-Layer Threat Model (`apps.audit`)
 
 Regulatory append-only audit trail capturing all administrative mutations and security events.
 
@@ -627,9 +686,20 @@ Regulatory append-only audit trail capturing all administrative mutations and se
   - `client_ip`: `GenericIPAddressField(null=True, blank=True)`
   - `user_agent`: `TextField(blank=True)`
   - `context_payload`: `JSONBField(default=dict)` (Non-sensitive contextual parameters, hashes, and diffs)
-- **Engine Protections:**
-  - `REVOKE UPDATE, DELETE, TRUNCATE ON TABLE audit_audit_event FROM gramsetu_app;`
-  - PostgreSQL `BEFORE UPDATE OR DELETE` trigger raising exception.
+
+#### The 5-Layer Threat Model & Protection Boundaries
+To avoid overstating guarantees, the audit subsystem explicitly evaluates protection against five distinct threat layers:
+
+1. **Layer 1: Normal Application Users & Operators:**  
+   *Protection:* Zero endpoints or forms exist in the application to update or delete audit events. Operators cannot modify logs. *(Fully Protected)*
+2. **Layer 2: Administrative Users (Super Administrators):**  
+   *Protection:* Django model `save()` and `delete()` methods raise `PermissionDenied`. Django Admin permissions are set to read-only (`has_delete_permission=False`). *(Protected against UI actions)*
+3. **Layer 3: Runtime Application Database Role (`gramsetu_app`):**  
+   *Protection:* `GRANT INSERT, SELECT ON TABLE audit_audit_event TO gramsetu_app;` and `REVOKE UPDATE, DELETE, TRUNCATE ON TABLE audit_audit_event FROM gramsetu_app;`. A `BEFORE UPDATE OR DELETE` database trigger raises an unignorable exception as secondary defense. Even if an attacker executes arbitrary SQL injection through the Django app, PostgreSQL rejects `UPDATE`/`DELETE` queries with permission denied (`42501`). *(Fully Protected at DB Engine)*
+4. **Layer 4: Privileged Database Roles (`gramsetu_migrator`, `postgres`):**  
+   *LIMITATION OF LOCAL DB:* Database permissions and triggers **cannot prevent** a database superuser (`postgres`) or the table owner (`gramsetu_migrator`) from dropping triggers or running direct `DELETE` queries. Absolute immutability against a database superuser is impossible within the same database engine.
+5. **Layer 5: Host-Level & Storage Volume Compromise:**  
+   *LIMITATION OF LOCAL STORAGE:* If an attacker obtains root access to the hosting OS or the Docker named volume (`gramsetu_pgdata`), local database tables can be overwritten. Complete protection against host compromise requires streaming audit logs out-of-band to an external WORM (Write-Once-Read-Many) storage repository, immutable remote syslog server, or append-only cloud storage. This is retained as an **explicitly deferred control** for production readiness.
 
 ---
 
@@ -788,75 +858,87 @@ erDiagram
    - If acceptable: Super Admin signs off, generating an `ApprovalRecord` (`governance_approval_record`).
    - If flawed: Super Admin rejects with mandatory rationale, generating a `RejectionRecord`. The Operator must create a new draft revision to address feedback.
 4. **Publication / Scheduling:** Super Admin executes immediate publication or sets a future `effective_from` timestamp. A `PublicationEvent` is created, and `NoticeTranslation.current_approved_revision` is updated.
-5. **Citizen Access:** Public queries evaluate:
-   ```sql
-   WHERE status = 'published'
-     AND effective_from <= NOW()
-     AND (expires_at IS NULL OR expires_at > NOW())
-   ```
+5. **Citizen Access:** Public queries evaluate the canonical 7 conditions (Section 3.3).
 6. **Automatic Expiry & Archival:** When `NOW() > expires_at`, queries automatically exclude the notice from active listings. An idempotent maintenance task flags `status = 'archived'`. If `PanchayatProfile.show_archived_notices_publicly == True`, citizens can still view the notice in the public historical archive.
 
-### 6.2 Urgent Publication Bypass Workflow
-To address emergencies (floods, epidemics, contamination), authorized Operators may bypass pre-publication Super Admin review under strict safeguards:
+### 6.2 Urgent Publication Bypass Workflow & Strict Safeguards
+To handle authentic emergencies (floods, epidemics, contamination), authorized Operators may publish urgent alerts without prior review, subject to strict boundaries preventing abuse:
 
-1. **Category & Authorization Pre-Condition:** The notice category must belong to an authorized emergency category (`disaster_alert`, `public_health`, `water_supply`), and the Operator must hold an active, non-revoked `OperatorUrgentAuthorization`.
-2. **Mandatory Justification:** The Operator must provide an explicit, non-empty justification string (min. 15 characters) stating the emergency rationale.
-3. **Execution:** Inside a single database transaction:
-   - Notice is created with `urgency = 'urgent'` and `is_urgent_published = True`.
-   - `NoticeRevision` is created in `editorial_status = 'approved'` (system bypass).
-   - `NoticeTranslation` is set to `status = 'published'`.
-   - `PublicationEvent` is created with `event_type = 'urgent_publish'`.
-   - `NoticeUrgentLog` is created with `ratification_status = 'pending_review'`.
-   - High-priority `AuditEvent` is recorded (`action = 'notice.urgent_published'`).
-4. **Mandatory Post-Publication Review:**
-   - The CMS dashboard alerts the Super Administrator immediately upon login.
-   - The Super Admin must conduct a post-publication review within 24 hours:
-     - **Ratify:** Marks `NoticeUrgentLog.ratification_status = 'ratified'`, validating the emergency publication.
-     - **Retract (Urgent Withdrawal):** If the notice was unwarranted or inaccurate, the Super Admin executes an emergency retraction. `NoticeTranslation.status` immediately transitions to `withdrawn`, citizen access is severed, a `WithdrawalRecord` is generated, and a high-severity audit event is logged.
+1. **Permitted Emergency Categories Only:**  
+   Bypass is strictly restricted to:
+   - `disaster_alert` (floods, earthquakes, building collapse)
+   - `public_health` (epidemics, cholera/dengue outbreak, vaccination emergencies)
+   - `water_supply` (pipe burst, toxic contamination, critical water outage)
+   - `weather_warning` (cyclone, extreme rainfall red alert)  
+   *Ordinary notices, tender announcements, administrative updates, and cultural event announcements can NEVER use the urgent bypass mechanism.*
+2. **Authorization Prerequisite:**  
+   The Operator must hold an active, non-revoked `OperatorUrgentAuthorization` granted exclusively by a Super Administrator. Operators **cannot** self-authorize. Authorizations are time-limited (max 30 days) and category-scoped.
+3. **Mandatory Justification:**  
+   The Operator must enter a mandatory justification string (minimum 15 characters) explaining the nature of the emergency and why normal approval could not be awaited.
+4. **Execution & Event Logging:** Inside a single database transaction:
+   - `Notice` created with `urgency = 'urgent'` and `is_urgent_published = True`.
+   - `NoticeRevision` created in `editorial_status = 'approved'` with `is_urgent_bypass = True`.
+   - `NoticeTranslation` set to `status = 'published'`.
+   - `PublicationEvent` created with `event_type = 'urgent_publish'`.
+   - `NoticeUrgentLog` created with `ratification_status = 'pending_review'`.
+   - High-priority `AuditEvent` emitted (`action = 'notice.urgent_published'`).
+5. **Mandatory Post-Publication Review & Strict 24-Hour Deadline:**  
+   The Super Administrator dashboard displays a persistent emergency banner alerting them to pending urgent notices. The Super Admin must conduct a formal review within **24 hours**:
+   - **Ratify:** If justified, Super Admin sets `ratification_status = 'ratified'`, generating an `ApprovalRecord` documenting post-publication sign-off.
+   - **Retract (Urgent Withdrawal):** If unjustified, inaccurate, or obsolete, Super Admin executes an immediate emergency retraction. `NoticeTranslation.status` becomes `withdrawn`, citizen access is severed instantly, a `WithdrawalRecord` is generated, and an administrative incident audit is logged.
 
 ---
 
-## 7. Document Versioning, Storage, & Disclosure Architecture
+## 7. Document Versioning, Storage, & Abstract Security Delivery Contract
 
 ### 7.1 Decoupled Storage Model
 To prevent Insecure Direct Object References (IDOR) and directory enumeration:
 - Physical binaries are stored in a private directory outside web server document roots (e.g., `/var/gramsetu/private_docs/` or container volume).
-- Disk filenames use unguessable UUIDv7 names without predictable extensions (e.g., `0192a83f-42e1-7d31-89e4-c78216314abc.dat`).
+- Disk filenames use unguessable UUID names without predictable extensions (e.g., `0192a83f-42e1-7d31-89e4-c78216314abc.dat`).
 - File metadata, user-facing filenames, MIME types, and SHA-256 integrity checksums are tracked in PostgreSQL (`DocumentVersion`).
 
-### 7.2 Disclosure Approval & Replacement Lifecycle
-```
-[ Operator Uploads v2 ] ──► Stored Privately ──► Status: pending_approval
-                                                      │
-[ Public Request ] ───────► Serves Approved v1 ◄──────┘ (v1 remains live)
-                                                      │
-                                           [ Super Admin Approves v2 ]
-                                                      │
-[ Public Request ] ───────► Serves Approved v2 ◄──────┴──► (v1 retained privately)
-```
+### 7.2 The 5-Point Abstract Security Delivery Contract
+Because GramSetu's production hosting platform is not yet finalized, document delivery must remain deployment-agnostic. Any future delivery implementation must satisfy this security contract:
 
-1. **Private Ingestion:** Uploaded files enter `disclosure_status = 'draft'`. They cannot be accessed by the public.
-2. **Review Request:** Operator transitions status to `pending_approval`.
-3. **Disclosure Approval:** Super Administrator reviews the document and approves disclosure. An `ApprovalRecord` is generated. `DocumentVersion.disclosure_status` becomes `approved_for_disclosure`, and `DocumentTranslation.current_version` points to the newly approved version.
-4. **Version Coexistence:** While Version 2 is under review, citizens downloading the document receive Version 1. Only after Version 2 is approved does public delivery switch to Version 2. Version 1 is retained privately for statutory audit.
-5. **Withdrawal:** Super Admin sets `disclosure_status = 'withdrawn'`. The download view immediately returns `404 Not Found` (or `410 Gone`) to citizens. The binary remains on disk for administrative inspection.
-6. **Permanent Deletion:** Permitted only by Super Administrators. Blocked if `Document.retention_hold == True` or if active references exist. Deletions physically remove the binary and record high-severity audit logs.
+1. **Mandatory Application Mediation:** Every download request must be authenticated and authorized by Django before any file bytes are transmitted. Direct static filesystem access is strictly blocked.
+2. **No Identifier-as-Authorization:** File UUIDs or internal paths are never treated as bearer credentials. Knowing a file path does not grant access.
+3. **Strict Disclosure Gate:** Anonymous citizens can download a document only if `DocumentTranslation.status == 'disclosed'` AND `DocumentVersion.disclosure_status == 'approved_for_disclosure'`.
+4. **Isolated Storage Location:** Physical storage directories must reside outside `STATIC_ROOT` and `MEDIA_ROOT`.
+5. **Pluggable Delivery Backends:** The application layer authorizes the request and delegates byte delivery to a mechanism appropriate for the environment:
+   - *Local Development / Portable Fallback:* Django streaming response (`FileResponse`).
+   - *Nginx Reverse Proxy:* `X-Accel-Redirect` to an internal location.
+   - *Apache / Caddy:* `X-Sendfile` header.
+   - *Cloud Object Storage (S3 / GCS):* Short-lived, time-limited pre-signed URLs (e.g. 5-minute validity) generated after authorization.
+   - *Government Cloud (NIC / SDC):* Application-mediated chunked streaming or internal gateway redirect depending on hosting rules.
 
-### 7.3 Controlled Streaming View
-Public downloads route through an authenticated/authorized Django view:
-- **Endpoint:** `/documents/<uuid:document_id>/download/?lang=mr`
-- **Validation:**
-  - If user is anonymous: requires `DocumentTranslation.status == 'disclosed'` AND `DocumentVersion.disclosure_status == 'approved_for_disclosure'`.
-  - If user is Operator: can download own drafts or pending reviews.
-  - If user is Super Admin: can download all versions.
-- **Delivery:** In production, Django returns an empty response with an `X-Accel-Redirect` (Nginx) or `X-Sendfile` (Apache) header, instructing the reverse proxy to stream the private file directly to the client at line-speed.
+### 7.3 Handling Edge Cases and Error States
+- **Unauthorized Anonymous Request:** Returns **`404 Not Found`** (avoids confirming existence of restricted files).
+- **Unauthorized Authenticated Request:** Returns **`403 Forbidden`** with standardized generic error message.
+- **Withdrawn Document:** Returns **`404 Not Found`** (or `410 Gone`), severs citizen access, retains private disk copy for statutory audit.
+- **Missing Physical File:** Logs critical error (`logger.critical`), returns **`404 Not Found`** to citizen without path leakage.
+- **Integrity Mismatch (Tampering):** If SHA-256 checksum fails, download is halted, high-severity `security.integrity_failure` audit event emitted, returns **`500 Internal Server Error`**.
+- **Version Transitions:** Downloading `/documents/<id>/download/` always delivers `current_version`. When Version 2 is uploaded, citizens continue receiving Version 1 until Version 2 is formally approved.
 
 ---
 
-## 8. PostgreSQL Integrity Constraints & Indexing Strategy
+## 8. PostgreSQL Integrity Constraints, Python Compatibility, & Indexing Strategy
 
-### 8.1 Critical Database Constraints
-GramSetu enforces data integrity at the database layer using PostgreSQL constraints:
+### 8.1 PostgreSQL & Python Compatibility Findings
+1. **Python 3.11 UUIDv7 Strategy:**  
+   *Finding:* Python 3.11.9 does NOT contain `uuid.uuid7()` in standard library (standard library support begins in Python 3.14 / PEP 738). PostgreSQL 16 also lacks a built-in `uuidv7()` function.  
+   *Design Strategy for Future Implementation:*
+   - **Primary Strategy (Zero Dependency):** Implement an RFC 9562-compliant UUIDv7 utility function in `apps.core.utils` (~15 lines of pure Python utilizing standard library `time.time_ns()` and `secrets.token_bytes()`).
+   - **Alternative (Deferred Dependency):** Add an approved third-party package (`uuid6` or `uuid-utils`) to `requirements.txt` in a future implementation milestone when dependencies are authorized.
+   - **Baseline Fallback:** Standard library `uuid.uuid4()` (supported natively in Python 3.11 and PostgreSQL 16 via `gen_random_uuid()`).
+   *(Note: No new dependencies are added in this milestone).*
+2. **PostgreSQL 16 ICU Collation (`mr-IN-x-icu`):**  
+   *Finding:* `mr-IN-x-icu` is verified to exist in the project's local `postgres:16-alpine` container (`collprovider = 'i'`, deterministic = true).  
+   *Prerequisite & Fallback:* Collation `mr-IN-x-icu` is recorded as an environment capability. On alternative production hosting environments lacking ICU library support, it must be created explicitly via `CREATE COLLATION "mr-IN-x-icu" (provider = icu, locale = 'mr-IN');` or fall back to standard `C.UTF-8`.
+3. **PostgreSQL Extensions Availability:**  
+   *Finding:* `btree_gist`, `pg_trgm`, and `unaccent` are available and trusted (`trusted = true`) in the local PostgreSQL 16 container, but are NOT installed by default.  
+   *Prerequisite:* If temporal exclusion constraints (`EXCLUDE USING gist`) or trigram search are used in future milestones, `CREATE EXTENSION IF NOT EXISTS btree_gist;` must be included in database migrations.
+
+### 8.2 Critical Database Constraints
 
 | Table Name | Constraint Name | Type | SQL Definition |
 | :--- | :--- | :--- | :--- |
@@ -877,7 +959,7 @@ GramSetu enforces data integrity at the database layer using PostgreSQL constrai
 | `governance_publication_event`| `chk_pub_dates` | `CHECK` | `CHECK (effective_until IS NULL OR effective_until > effective_from)` |
 | `governance_rejection_record` | `chk_rejection_reason` | `CHECK` | `CHECK (LENGTH(TRIM(rejection_reason)) >= 10)` |
 
-### 8.2 Indexing Strategy
+### 8.3 Indexing Strategy
 1. **Public Listing Indexes (B-tree Compound):**
    - `notices_notice (effective_from DESC, expires_at)`
    - `notices_notice_translation (language_code, status)`
@@ -921,7 +1003,7 @@ with transaction.atomic():
 ### 9.2 Idempotent Background Maintenance
 Scheduled publication activations and archival sweeps are idempotent:
 ```sql
-UPDATE notices_notice_translation
+UPDATE notices_noticetranslation
 SET status = 'archived'
 WHERE status = 'published'
   AND notice_id IN (
@@ -977,13 +1059,18 @@ To guarantee a clean, focused, and secure foundation for the initial public laun
 - **Risk:** An Operator attempts to publish non-emergency notices via the urgent pathway.  
   *Mitigation:* Predefined category restrictions, mandatory justification, high-priority audit alerts, and mandatory Super Admin post-publication review/ratification within 24 hours.
 - **Risk:** Unapproved private documents leaked through URL guessing.  
-  *Mitigation:* Unguessable UUIDv7 storage paths, storage outside the web root, and reverse-proxy internal streaming views strictly gated by Django authorization.
+  *Mitigation:* Unguessable UUID storage paths, storage outside the web root, and reverse-proxy internal streaming views strictly gated by Django authorization.
 - **Risk:** Database storage growth from binary versions.  
   *Mitigation:* Strict 50 MB file upload limit; file binaries stored on disk volume, not in PostgreSQL `bytea` columns.
 
-### 12.3 Open Questions for Future Milestones
-1. **Physical File Backup Boundary:** While database logical backups are automated via `scripts/backup.py`, binary document files in private storage must be paired with database dumps to guarantee recovery consistency.
-2. **Digital Signatures (DSC):** Indian government e-tenders and official resolutions increasingly adopt token-based Digital Signature Certificates (DSC / PKI). The data model supports storing signature hashes (`DocumentVersion.checksum_sha256`), but hardware token integration is deferred.
+### 12.3 Explicit Open Operational Risks (Unresolved Prior to Production)
+1. **Document-Storage Backup Coupling & Recovery Consistency:**  
+   *Risk Description:* While database logical backups are automated via `scripts/backup.py` (`pg_dump -Fc`), physical document binaries in private storage are backed up independently. If database backups and filesystem snapshots are taken at different times, restoring from backup results in orphaned files or dangling pointers to missing files.  
+   *Required Recovery Invariant:* The database metadata and corresponding document files must be recoverable to a **mutually consistent point-in-time**.  
+   *Current Status:* **Unresolved Risk.** A successful database archive alone does not prove application recoverability. Coordinated database-plus-storage backup and disaster recovery restoration have **not yet been verified**. This remains a prerequisite for production deployment.
+2. **Production Hosting Platform & Reverse-Proxy Selection:**  
+   *Risk Description:* The production hosting provider (NIC/S3WaaS, Maharashtra State Data Center, commercial cloud VPS) has not been selected. Reverse-proxy configurations (`X-Accel-Redirect` vs `X-Sendfile` vs S3 pre-signed URLs) remain deployment-dependent.  
+   *Mitigation:* The abstract 5-point document security delivery contract (Section 7.2) decouples application authorization from physical transfer mechanism.
 
 ---
-*Milestone 3 Design Specification complete. Awaiting review and explicit authorization prior to model implementation.*
+*Milestone 3.1 Design Verification complete. Design-only corrections finalized. Awaiting review and explicit authorization prior to model implementation.*

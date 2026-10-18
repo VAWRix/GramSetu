@@ -62,10 +62,10 @@ The PostgreSQL schema will enforce the following invariants using native constra
 | **Chronological Date Sanity** | `CHECK` Constraint | `CONSTRAINT check_dates CHECK (effective_from <= effective_until)` |
 | **Notice Expiry Sanity** | `CHECK` Constraint | `CONSTRAINT check_expiry CHECK (expires_at IS NULL OR expires_at > published_at)` |
 | **Single Active Publication** | **Partial Unique Index** | `CREATE UNIQUE INDEX uq_active_published_per_lang ON notices_noticetranslation (notice_id, language_code) WHERE (status = 'published');` |
-| **Single Active Emergency Banner** | **Partial Unique Index** | `CREATE UNIQUE INDEX uq_active_emergency_banner ON site_config_emergencybanner (is_active) WHERE (is_active = TRUE);` |
 | **Revision Number Sequence** | `UNIQUE` Constraint | `UNIQUE (translation_id, revision_number)` |
 | **Cascade & Protection Rules** | Foreign Key Actions | `ON DELETE CASCADE` for parent-child translations/revisions;<br>`ON DELETE PROTECT` for documents attached to official notices;<br>`ON DELETE PROTECT` for users referenced in approvals. |
-| **Audit Immutability** | SQL Permissions & Triggers | `REVOKE UPDATE, DELETE ON audit_audit_event FROM gramsetu_app;`<br>`BEFORE UPDATE OR DELETE` trigger raising exception. |
+| **Audit Immutability (App-level)** | SQL Permissions & Triggers | `REVOKE UPDATE, DELETE ON audit_audit_event FROM gramsetu_app;`<br>`BEFORE UPDATE OR DELETE` trigger raising exception.<br>*(Note: Defends strictly against runtime role `gramsetu_app`; does not protect against superuser or table owner `gramsetu_migrator`)* |
+| **Temporal Exclusion (If used)** | `EXCLUDE USING gist` | Prevents overlapping date ranges for single active states.<br>*(Prerequisite: requires trusted extension `btree_gist`, which must be enabled via migration)* |
 
 ### 4.2 Invariants Enforced by Django Application Logic
 
