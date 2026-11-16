@@ -7,10 +7,9 @@
 
 ## 1. System Topology Overview
 
-GramSetu is engineered as a decoupled, 3-tier enterprise web and mobile platform:
+GramSetu is engineered as a decoupled, 3-tier enterprise web platform:
 1. **Presentation Layer**: 
-   - A reactive Next.js 16 (React 19, TypeScript, Tailwind CSS v4) application running on port `3005`, providing both the Public Citizen Portal and Staff Administrative CMS.
-   - A companion native Android WebView application (`in.gov.maharashtra.gramsetu`, compiled targeting Android SDK 35) providing mobile access with offline detection, swipe-to-refresh, file upload, and download management.
+   - A reactive Next.js 16 (React 19, TypeScript, Tailwind CSS v4) application running on port `3005`, providing both the Public Citizen Portal and Staff Administrative CMS. Designed with mobile-first responsive architecture supporting desktop monitors, tablets, and mobile web browsers.
 2. **Business Logic & Governance Layer**: 
    - A high-integrity Python 3.11 and Django 5.2 LTS backend running on port `8000`, organized into 12 Domain Applications. It exposes REST JSON endpoints under `/api/` and executes a dual-custody Maker-Checker publishing workflow.
 3. **Persistent Data Layer**: 
@@ -19,8 +18,7 @@ GramSetu is engineered as a decoupled, 3-tier enterprise web and mobile platform
 ```mermaid
 flowchart TD
     subgraph ClientLayer["Presentation Layer"]
-        WebClients["Desktop & Mobile Web Browsers<br>(Chrome, Edge, Firefox, Safari)"]
-        AndroidNative["Native Android Mobile App<br>(in.gov.maharashtra.gramsetu - 6.29MB)"]
+        WebClients["Desktop, Tablet & Mobile Web Browsers<br>(Chrome, Edge, Firefox, Safari)"]
     end
 
     subgraph FrontendApp["Frontend Application (Next.js 16 - Port 3005)"]
@@ -46,8 +44,6 @@ flowchart TD
 
     WebClients --> PublicPortal
     WebClients --> AdminCMS
-    AndroidNative --> PublicPortal
-    AndroidNative --> AdminCMS
     PublicPortal --> ContextProviders
     AdminCMS --> ContextProviders
     PublicPortal --> ApiClient
@@ -95,17 +91,22 @@ sequenceDiagram
 
 ---
 
-## 3. Native Android WebView Integration
+## 3. Universal Client Accessibility & Responsive Design
 
-The project includes a production-ready Android application located in `android-app/`:
-- **Namespace**: `in.gov.maharashtra.gramsetu`
-- **Application Class**: `MainActivity.kt` (407 lines of native Kotlin)
-- **Target SDK**: Android SDK 35 (Android 15), Minimum SDK 26 (Android 8.0 Oreo+)
-- **Key Native Capabilities**:
-  1. **Core SplashScreen**: Android 12+ `installSplashScreen()` branding.
-  2. **Pull-to-Refresh**: `androidx.swiperefreshlayout:1.1.0` reloads active web views.
-  3. **File Upload Chooser**: `WebChromeClient.onShowFileChooser` launches Android system file pickers via Activity Result Contracts.
-  4. **Native Download Manager**: Intercepts PDF and document download links, passing them to Android's background `DownloadManager`.
-  5. **Back Button Navigation**: Intercepts back gestures using `OnBackPressedCallback` to navigate WebView history before app exit.
-  6. **Offline Detection**: Monitors network state via `ConnectivityManager`, rendering a native offline fallback screen with retry button when disconnected.
-  7. **Security Hardening**: Disables `file://` access, enables SafeBrowsing, restricts internal navigation to `.gov.in` and loopback hosts, and dispatches external links to the system browser.
+The presentation tier is designed according to Guidelines for Indian Government Websites (GIGW 3.0) and Web Content Accessibility Guidelines (WCAG 2.2 Level AA):
+
+1. **Fluid Responsive Grids**: Flexbox and CSS Grid layouts dynamically reflow across desktop viewports (1280px+), tablet viewports (768px-1024px), and mobile viewports (320px-640px).
+2. **Mobile Navigation Drawer**: Accessible touch-friendly slide-out drawer on smaller screens with focus trapping and ARIA attributes.
+3. **Trilingual Runtime Rendering**: Instant client-side localization between Marathi (`mr`), Hindi (`hi`), and English (`en`) without full page reloads.
+4. **WCAG 2.2 AA Contrast Compliance**: High-contrast dark theme mode offering > 7:1 contrast ratio for users with visual impairments.
+5. **Dynamic Text Scaling**: Tri-level root REM scaling (`100%`, `110%`, `120%`) respecting browser accessibility preferences.
+
+---
+
+## 4. Future Scope
+
+The following capabilities are planned for subsequent development phases and are not currently implemented:
+
+- **Android Mobile Application**: Development of a dedicated Android mobile application to extend GramSetu's accessibility to smartphone users.
+- **Biometric Citizen Service Kiosks**: Integration with physical Gram Panchayat touchscreen information kiosks.
+- **Automated WhatsApp / SMS Gateway**: Push notifications for statutory Gram Sabha summons and urgent disaster alerts.

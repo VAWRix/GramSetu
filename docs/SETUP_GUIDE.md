@@ -12,8 +12,6 @@
 | **Python** | 3.11+ | Backend Django framework, psycopg2 adapter, and OTP CLI commands |
 | **Node.js** | 20+ (LTS) | Frontend Next.js 16, React 19, and Tailwind CSS v4 |
 | **Docker Desktop** | 26+ | PostgreSQL 16 Alpine containerized database isolation |
-| **Java JDK** | OpenJDK 17 or 21 | Native Android APK compilation via Gradle 8.13 |
-| **Android SDK** | SDK 35 | Android command-line tools & platform-tools |
 
 ---
 
@@ -119,19 +117,8 @@ In development (`settings.DEBUG == True`), retrieve single-use MFA codes directl
 
 ---
 
-## 7. Android Application Build (Kotlin WebView)
+## 7. Future Scope
 
-1. Navigate to the Android application folder:
-   ```powershell
-   cd android-app
-   ```
-2. Build the Debug APK:
-   ```powershell
-   .\gradlew assembleDebug
-   ```
-3. Compiled APK Output:
-   - Path: `android-app/app/build/outputs/apk/debug/app-debug.apk` (~6.29 MB)
-4. Install on a connected Android device or emulator:
-   ```powershell
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
-   ```
+The following components are planned for future development milestones and are not currently implemented:
+
+- **Android Mobile Application**: Development of a dedicated Android mobile application to extend GramSetu's accessibility to smartphone users.

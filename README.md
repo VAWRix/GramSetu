@@ -2,12 +2,11 @@
 
 ![GramSetu Banner](docs/screenshots/01_homepage_desktop_mr.png)
 
-[![Platform: Web & Android](https://img.shields.io/badge/Platform-Web%20%7C%20Android-blue.svg)](#technology-stack)
+[![Platform: Web Platform](https://img.shields.io/badge/Platform-Web%20Platform-blue.svg)](#technology-stack)
 [![Backend: Django 5.2 LTS](https://img.shields.io/badge/Backend-Django%205.2%20LTS-092E20.svg?logo=django)](#backend-technologies)
 [![Frontend: Next.js 16](https://img.shields.io/badge/Frontend-Next.js%2016-black.svg?logo=next.js)](#frontend-technologies)
 [![Language: TypeScript & Python](https://img.shields.io/badge/Language-TypeScript%20%7C%20Python-3178C6.svg)](#technology-stack)
 [![Database: PostgreSQL 16](https://img.shields.io/badge/Database-PostgreSQL%2016-336791.svg?logo=postgresql)](#database-architecture)
-[![Mobile: Android SDK 35](https://img.shields.io/badge/Mobile-Android%20SDK%2035-3DDC84.svg?logo=android)](#android-application)
 [![Accessibility: WCAG 2.2 AA / GIGW 3.0](https://img.shields.io/badge/Accessibility-WCAG%202.2%20AA%20%2F%20GIGW%203.0-green.svg)](#accessibility--multilingual-support)
 
 ---
@@ -40,8 +39,8 @@
   - Dedicated development OTP retrieval commands (`superadmin_otp`, `operator_otp`).
   - Comprehensive Content, Notice, Document, Event, and Scheme management engines.
   - Immutable governance audit ledger recording all approvals, rejections, and publications.
-- **Companion Native Android Application**:
-  - Native Kotlin Android client (`in.gov.maharashtra.gramsetu`, compiling SDK 35) providing pull-to-refresh, file upload pickers, background PDF downloads, and offline connectivity fallbacks.
+- **Universal Multi-Device Access**:
+  - Fully responsive, mobile-first design optimized for desktop workstations, tablets, and smartphones.
 
 ---
 
@@ -59,7 +58,7 @@
 |:---:|:---:|
 | ![Staff Login](docs/screenshots/14_cms_login_gate.png) | ![CMS Dashboard](docs/screenshots/cms/cms-dashboard-desktop.png) |
 
-| Maker-Checker Governance Queue | Mobile Viewport / Android Integration |
+| Maker-Checker Governance Queue | Responsive Mobile Viewport |
 |:---:|:---:|
 | ![Governance Queue](docs/screenshots/cms/cms-governance-desktop.png) | ![Mobile Home](docs/screenshots/18_mobile_homepage.png) |
 
@@ -91,11 +90,6 @@
   - `gramsetu_test_runner`: Restricted strictly to `gramsetu_test`.
   - `gramsetu_backup`: Dedicated non-locking backup role equipped with `pg_read_all_data`.
 
-### Android / Mobile Technologies
-- **Language & Runtime**: Kotlin targeting Android SDK 35 (Android 15), Minimum SDK 26 (Android 8.0 Oreo+)
-- **Build System**: Gradle 8.13 with Kotlin DSL
-- **Components**: AndroidX WebKit (`1.12.1`), `SwipeRefreshLayout` (`1.1.0`), Core SplashScreen (`1.0.1`), native `DownloadManager`
-
 ---
 
 ## 5. System Architecture
@@ -103,8 +97,7 @@
 ```mermaid
 flowchart TD
     subgraph ClientLayer["Presentation Layer"]
-        WebClients["Desktop & Mobile Web Browsers<br>(Chrome, Edge, Firefox, Safari)"]
-        AndroidNative["Native Android Mobile App<br>(in.gov.maharashtra.gramsetu - 6.29MB)"]
+        WebClients["Desktop, Tablet & Mobile Web Browsers<br>(Chrome, Edge, Firefox, Safari)"]
     end
 
     subgraph FrontendApp["Frontend Application (Next.js 16 - Port 3005)"]
@@ -130,8 +123,6 @@ flowchart TD
 
     WebClients --> PublicPortal
     WebClients --> AdminCMS
-    AndroidNative --> PublicPortal
-    AndroidNative --> AdminCMS
     PublicPortal --> ContextProviders
     AdminCMS --> ContextProviders
     PublicPortal --> ApiClient
@@ -211,20 +202,12 @@ stateDiagram-v2
 
 ---
 
-## 9. Android Native Mobile Application
+## 9. Universal Accessibility & Responsive Design
 
-The companion Android application is located in `android-app/`:
-- **Namespace**: `in.gov.maharashtra.gramsetu`
-- **Application Class**: `MainActivity.kt` (407 lines of native Kotlin)
-- **Compile SDK**: 35 | **Minimum SDK**: 26 (Android 8.0 Oreo+)
-- **Key Features**:
-  - Android 12+ Core SplashScreen API integration.
-  - Material `SwipeRefreshLayout` for pull-to-refresh page reloading.
-  - `WebChromeClient.onShowFileChooser` enabling direct photo and document uploads from mobile storage.
-  - Native `DownloadManager` interception for background downloading of disclosed PDF orders.
-  - `OnBackPressedCallback` managing webview history before application exit.
-  - Network state monitoring via `ConnectivityManager` with a native offline retry screen.
-  - Hardened security: disabled `file://` scheme access, Google SafeBrowsing enabled, and custom User-Agent injection (`GramSetuAndroid/1.0.0`).
+GramSetu is designed from the ground up to ensure seamless usability across devices:
+- **Responsive Layout**: Fluid grids and CSS Flexbox layouts adapt dynamically to desktop monitors, tablets, and smartphones.
+- **GIGW 3.0 & WCAG 2.2 AA Compliance**: Contrast ratios exceeding 7:1, tri-level text scaling (100%, 110%, 120%), semantic HTML5 landmarks, and skip-to-content links.
+- **Touch-Friendly Controls**: Minimum 44x44px interactive tap targets, accessible mobile drawer navigation, and swipe-friendly photo carousels.
 
 ---
 
@@ -239,18 +222,6 @@ GramSetu/
 ├── manage.py                         # Django administrative CLI
 ├── requirements.txt                  # Pinned Python backend dependencies
 ├── requirements-prod.txt             # Production dependencies (Gunicorn, etc.)
-│
-├── android-app/                      # Native Android Kotlin WebView Application
-│   ├── app/
-│   │   ├── build.gradle.kts          # App-level build configuration (SDK 35)
-│   │   ├── proguard-rules.pro        # ProGuard obfuscation rules
-│   │   └── src/main/
-│   │       ├── AndroidManifest.xml   # Permissions and activity definitions
-│   │       ├── java/.../MainActivity.kt # Hardened WebView client implementation
-│   │       └── res/                  # Drawables, layouts, strings, and theme definitions
-│   ├── build.gradle.kts              # Root Gradle configuration
-│   ├── gradlew / gradlew.bat         # Gradle wrapper binaries
-│   └── settings.gradle.kts           # Android project settings
 │
 ├── apps/                             # 12 Modular Django Domain Applications
 │   ├── audit/                        # Immutable application audit logging
@@ -307,8 +278,6 @@ GramSetu/
 - **Python**: 3.11+
 - **Node.js**: 20+ (LTS) & npm 10+
 - **Docker Desktop**: 26+ (Running Linux containers)
-- **Java JDK**: OpenJDK 17 or 21 (For Android APK builds)
-- **Android SDK**: Platform tools and SDK 35
 
 ### 11.2 Environment Configuration
 ```powershell
@@ -374,36 +343,19 @@ In development (`settings.DEBUG == True`), retrieve single-use MFA codes directl
 
 ---
 
-## 12. Android Application Build Instructions
-
-```powershell
-cd android-app
-
-# 1. Compile Debug APK targeting Android SDK 35
-.\gradlew assembleDebug
-
-# 2. Output APK binary is generated at:
-# android-app\app\build\outputs\apk\debug\app-debug.apk (~6.29 MB)
-
-# 3. Install on connected Android device or emulator via ADB:
-adb install -r app\build\outputs\apk\debug\app-debug.apk
-```
-
----
-
-## 13. Current Project Scope vs. Future Roadmap
+## 12. Current Project Scope vs. Future Roadmap
 
 ### Implemented & Verified Capabilities
-- Full-stack decoupled architecture (Next.js 16 + Django 5.2 + PostgreSQL 16).
+- Full-stack decoupled web architecture (Next.js 16 + Django 5.2 + PostgreSQL 16).
 - 14-section trilingual Village Knowledge Portal in Official Light Theme.
 - Maker-Checker dual-custody content review queue with side-by-side diffs.
 - Email OTP Multi-Factor Authentication with brute-force defense.
 - Cryptographic SHA-256 integrity verification on public documents and photographs.
-- Full compliance with GIGW 3.0 and WCAG 2.2 AA accessibility standards.
-- Production-ready native Android WebView application.
+- Full compliance with GIGW 3.0 and WCAG 2.2 AA accessibility standards across desktop, tablet, and mobile browsers.
 - 305 backend unit/integration tests and 42 Playwright browser E2E test suites.
 
 ### Future Roadmap
+- **Android Mobile Application**: Development of a dedicated Android mobile application to extend GramSetu's accessibility to smartphone users.
 - **Citizen Property & Water Tax Gateway**: State treasury banking integration (Maharashtra e-Gras).
 - **Citizen Grievance Redressal Portal**: Bidirectional issue ticketing integrated with Aaple Sarkar.
 - **SMS OTP Gateway**: Maharashtra CDAC SMS integration for low-bandwidth cellular environments.
@@ -411,7 +363,7 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 
 ---
 
-## 14. Contributing & License
+## 13. Contributing & License
 
 ### Contributing
 This repository represents the official academic project submission for GramSetu. External contributions, pull requests, and forks are welcome for academic research and public governance evaluations. Please review [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md) before submitting pull requests.
@@ -421,7 +373,7 @@ This project currently has no specified open-source license. All rights are rese
 
 ---
 
-## 15. Acknowledgements
+## 14. Acknowledgements
 
 - **Anchor Institution**: Narayangaon Gram Panchayat, Paithan Tehsil, Chhatrapati Sambhajinagar District, Maharashtra.
 - **Statutory Frameworks**: Maharashtra Village Panchayats Act (1959), Guidelines for Indian Government Websites (GIGW 3.0), Right to Information Act (2005).

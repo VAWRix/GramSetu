@@ -101,3 +101,14 @@ stateDiagram-v2
 - **Operator (Maker)**: Drafts and submits revisions. Cannot approve their own submissions (`is_self_approval` check blocks operator approvals).
 - **Super Admin / Gramsevak (Checker)**: Has statutory authority to approve, reject with justification, or publish directly.
 - **Sarpanch**: By democratic constitutional design, holds **no technical login account**, preserving official records from partisan tampering.
+
+---
+
+## 5. Future Scope
+
+The following capabilities are planned for future development milestones and are not currently implemented:
+
+- **Android Mobile Application**: Development of a dedicated Android mobile application to extend GramSetu's accessibility to smartphone users.
+- **Citizen Property & Water Tax Gateway**: State treasury banking integration (Maharashtra e-Gras).
+- **Automated WhatsApp / SMS Gateway**: Push notifications for statutory Gram Sabha summons and urgent disaster alerts.
+
