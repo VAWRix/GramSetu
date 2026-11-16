@@ -2,7 +2,11 @@
 """
 GramSetu Local Logical Backup Utility
 
-Executes a PostgreSQL-consistent logical backup using least-privilege role 'gramsetu_backup':
+Executes a PostgreSQL-consistent logical backup using least-privilege roles:
+- Targets 'dev' (default) via role 'gramsetu_backup' on database 'gramsetu_dev'.
+- Targets 'test' via role 'gramsetu_test_runner' on database 'gramsetu_test'.
+
+Pipeline:
 1. Executes pg_dump non-interactively (without pseudo-terminal -t) directly to a temporary file in host-mounted volume.
 2. Validates process exit status (must be 0).
 3. Validates file existence and minimum size floor (> 1024 bytes).
@@ -25,18 +29,27 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 
-BACKUP_USER = os.getenv('BACKUP_DB_USER', 'gramsetu_backup')
-BACKUP_PASSWORD = os.getenv('BACKUP_DB_PASSWORD')
-DEV_DB_NAME = os.getenv('DEV_DB_NAME', 'gramsetu_dev')
+target = sys.argv[1].lower() if len(sys.argv) > 1 else 'dev'
+if target == 'test':
+    DB_NAME = os.getenv('TEST_DB_NAME', 'gramsetu_test')
+    BACKUP_USER = os.getenv('TEST_DB_USER', 'gramsetu_test_runner')
+    BACKUP_PASSWORD = os.getenv('TEST_DB_PASSWORD')
+    if not BACKUP_PASSWORD:
+        sys.exit("CRITICAL ERROR: 'TEST_DB_PASSWORD' is not defined in .env")
+elif target == 'dev':
+    DB_NAME = os.getenv('DEV_DB_NAME', 'gramsetu_dev')
+    BACKUP_USER = os.getenv('BACKUP_DB_USER', 'gramsetu_backup')
+    BACKUP_PASSWORD = os.getenv('BACKUP_DB_PASSWORD')
+    if not BACKUP_PASSWORD:
+        sys.exit("CRITICAL ERROR: 'BACKUP_DB_PASSWORD' is not defined in .env")
+else:
+    sys.exit(f"CRITICAL ERROR: Unknown backup target '{target}'. Permitted targets are 'dev' or 'test'.")
+
 HOST_BACKUP_DIR = BASE_DIR / 'backups'
-
-if not BACKUP_PASSWORD:
-    sys.exit("CRITICAL ERROR: 'BACKUP_DB_PASSWORD' is not defined in .env")
-
 HOST_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
 timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-dump_filename = f"{DEV_DB_NAME}_{timestamp}.dump"
+dump_filename = f"{DB_NAME}_{timestamp}.dump"
 tmp_filename = f"{dump_filename}.tmp"
 
 container_tmp_path = f"/var/backups/postgres/{tmp_filename}"
@@ -45,7 +58,7 @@ host_tmp_path = HOST_BACKUP_DIR / tmp_filename
 host_final_path = HOST_BACKUP_DIR / dump_filename
 host_checksum_path = HOST_BACKUP_DIR / f"{dump_filename}.sha256"
 
-print(f">>> [GramSetu Backup] Initiating logical backup for '{DEV_DB_NAME}'...")
+print(f">>> [GramSetu Backup] Initiating logical backup for '{DB_NAME}' using role '{BACKUP_USER}'...")
 
 backup_committed = False
 
@@ -57,7 +70,7 @@ try:
         'gramsetu-postgres',
         'pg_dump',
         '-U', BACKUP_USER,
-        '-d', DEV_DB_NAME,
+        '-d', DB_NAME,
         '-Fc',
         '-f', container_tmp_path
     ]

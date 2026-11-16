@@ -11,6 +11,24 @@ urlpatterns = [
     
     # Administrative portal
     path('admin/', admin.site.urls),
+
+    # Protected documents and downloads domain
+    path('documents/', include('apps.documents.urls')),
+
+    # Panchayat events and meetings domain
+    path('events/', include('apps.events.urls')),
+
+    # Government welfare schemes domain
+    path('schemes/', include('apps.schemes.urls')),
+
+    # Approved media gallery domain
+    path('gallery/', include('apps.gallery.urls')),
+
+    # Unified public search domain
+    path('search/', include('apps.search.urls')),
+
+    # Dedicated Public Read-Only JSON API for Frontend Integration
+    path('api/', include('apps.core.api_urls')),
 ]
 
 # Standardized error handlers

@@ -47,6 +47,7 @@ DJANGO_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.postgres',
 ]
 
 # 12 Domain Apps establishing clear architectural module boundaries
@@ -65,17 +66,25 @@ LOCAL_APPS = [
     'apps.identity',        # Future invitation-only CMS accounts, role permissions
 ]
 
-INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
+THIRD_PARTY_APPS = [
+    'django_otp',
+    'django_otp.plugins.otp_email',
+    'django_otp.plugins.otp_static',
+]
+
+INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 # Custom User Model (Email-based identity in apps.identity)
 AUTH_USER_MODEL = 'identity.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'apps.core.middleware.DeliberateCorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django_otp.middleware.OTPMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -235,10 +244,129 @@ USE_TZ = True
 
 
 # ------------------------------------------------------------------------------
-# Static Files & Storage
+# Static Files & Protected Document Storage
 # ------------------------------------------------------------------------------
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# Protected document storage (ADR 0004: outside web root, private by default)
+PRIVATE_DOCUMENTS_DIR = Path(os.getenv('PRIVATE_DOCUMENTS_DIR', BASE_DIR / 'private_docs'))
+PRIVATE_DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Protected gallery image storage (outside web root, private by default)
+PRIVATE_GALLERY_DIR = Path(os.getenv('PRIVATE_GALLERY_DIR', BASE_DIR / 'private_media' / 'gallery'))
+PRIVATE_GALLERY_DIR.mkdir(parents=True, exist_ok=True)
+
+# ------------------------------------------------------------------------------
+# Session Security & HTTP Security Headers (Statutory GIGW Compliance)
+# ------------------------------------------------------------------------------
+
+# 30-minute session inactivity expiration for administrative CMS users
+SESSION_COOKIE_AGE = int(os.getenv('SESSION_COOKIE_AGE', 1800))
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+
+# CSRF Cookie Protection
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = not DEBUG
+
+# HTTP Security Headers (Statutory GIGW Compliance)
+X_FRAME_OPTIONS = 'DENY'
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+
+# HTTPS & Strict Transport Security (Activated in production or when explicitly configured)
+SECURE_SSL_REDIRECT = (
+    os.getenv('DJANGO_SECURE_SSL_REDIRECT', 'False').lower() in ('true', '1', 't')
+    if not DEBUG else False
+)
+SECURE_HSTS_SECONDS = (
+    int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', 31536000))
+    if (not DEBUG and not IS_TESTING) else 0
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = (
+    os.getenv('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True').lower() in ('true', '1', 't')
+    if (not DEBUG and not IS_TESTING) else False
+)
+SECURE_HSTS_PRELOAD = (
+    os.getenv('DJANGO_SECURE_HSTS_PRELOAD', 'True').lower() in ('true', '1', 't')
+    if (not DEBUG and not IS_TESTING) else False
+)
+
+# Reverse proxy SSL header (trusted when terminated behind Nginx/ALB)
+if os.getenv('DJANGO_SECURE_PROXY_SSL_HEADER', 'False').lower() in ('true', '1', 't'):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Cache Configuration (Configurable for multi-worker production environments)
+CACHE_BACKEND = os.getenv('DJANGO_CACHE_BACKEND', 'locmem').lower()
+if CACHE_BACKEND == 'db':
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'gramsetu_cache_table',
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'gramsetu-locmem',
+        }
+    }
+
+# Deliberate CORS & CSRF Configuration for Next.js frontend integration
+CORS_ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.getenv(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3005,http://127.0.0.1:3005',
+    ).split(',') if origin.strip()
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip() for origin in os.getenv(
+        'CSRF_TRUSTED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3005,http://127.0.0.1:3005',
+    ).split(',') if origin.strip()
+]
+
+# ------------------------------------------------------------------------------
+# Transactional Email Gateway & Production Fail-Closed Policy
+# ------------------------------------------------------------------------------
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend' if (DEBUG or IS_TESTING)
+    else 'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('1', 'true', 'yes')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@gramsetu.gov.in')
+
+# ------------------------------------------------------------------------------
+# Multi-Factor Authentication (django-otp) Settings
+# ------------------------------------------------------------------------------
+OTP_EMAIL_TOKEN_VALIDITY = int(os.getenv('OTP_EMAIL_TOKEN_VALIDITY', 300))  # 5 minutes
+OTP_EMAIL_COOLDOWN_DURATION = int(os.getenv('OTP_EMAIL_COOLDOWN_DURATION', 60))  # 60s cooldown
+OTP_EMAIL_TOKEN_TEMPLATE = '{{ token }}'
+OTP_EMAIL_SUBJECT = 'GramSetu CMS - Verification Code / पडताळणी कोड'
+OTP_EMAIL_BODY_TEMPLATE = (
+    'Your GramSetu CMS one-time verification code is: {{ token }}\n\n'
+    'This code is valid for 5 minutes. Do not share this code with anyone.\n'
+    'If you did not request this verification code, please alert your Super Administrator immediately.'
+)
+OTP_EMAIL_SENDER = DEFAULT_FROM_EMAIL
+
+# ------------------------------------------------------------------------------
+# Meeting & Statutory Event Settings
+# ------------------------------------------------------------------------------
+MEETING_CANCELLATION_ALERT_HOURS = int(os.getenv('MEETING_CANCELLATION_ALERT_HOURS', 6))
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+

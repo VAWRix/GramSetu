@@ -65,7 +65,7 @@ class RoleAssignmentTests(SimpleTestCase):
     """
 
     def test_role_properties(self):
-        user = User(email='admin@gramsetu.in', full_name='Sarpanch')
+        user = User(email='admin@gramsetu.in', full_name='Gram Sevak')
         admin_role = RoleAssignment(user=user, role=ROLE_SUPER_ADMIN)
         self.assertTrue(admin_role.is_super_admin)
         self.assertFalse(admin_role.is_operator)
