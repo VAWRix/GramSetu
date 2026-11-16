@@ -1,0 +1,47 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Emblem Gold Circle -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M54,18 A36,36 0 1,0 54,90 A36,36 0 1,0 54,18 Z" />
+    <!-- Inner Navy Circle -->
+    <path
+        android:fillColor="#1E3A8A"
+        android:pathData="M54,22 A32,32 0 1,0 54,86 A32,32 0 1,0 54,22 Z" />
+    <!-- Government Pillar / Capitol Icon -->
+    <!-- Base Pedestal -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,74 L74,74 L74,70 L34,70 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M37,68 L71,68 L71,65 L37,65 Z" />
+    <!-- Columns -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M39,45 L43,45 L43,63 L39,63 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,45 L52,45 L52,63 L48,63 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M56,45 L60,45 L60,63 L56,63 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M65,45 L69,45 L69,63 L65,63 Z" />
+    <!-- Architrave / Beam -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,41 L72,41 L72,44 L36,44 Z" />
+    <!-- Triangular Pediment -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M34,40 L54,28 L74,40 Z" />
+    <!-- Ashoka Chakra Style Mini Star / Hub -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,34 A2.5,2.5 0 1,0 54,39 A2.5,2.5 0 1,0 54,34 Z" />
+</vector>

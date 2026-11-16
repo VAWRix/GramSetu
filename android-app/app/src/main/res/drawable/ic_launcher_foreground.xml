@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Emblem Gold Circle -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M54,24 A30,30 0 1,0 54,84 A30,30 0 1,0 54,24 Z" />
+    <!-- Inner Navy Circle -->
+    <path
+        android:fillColor="#1E3A8A"
+        android:pathData="M54,27 A27,27 0 1,0 54,81 A27,27 0 1,0 54,27 Z" />
+    <!-- Pedestal -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,71 L70,71 L70,68 L38,68 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,66 L68,66 L68,64 L40,64 Z" />
+    <!-- Columns -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,47 L45,47 L45,62 L42,62 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,47 L53,47 L53,62 L50,62 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55,47 L58,47 L58,62 L55,62 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M63,47 L66,47 L66,62 L63,62 Z" />
+    <!-- Architrave -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M39,44 L69,44 L69,46 L39,46 Z" />
+    <!-- Roof -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M37,43 L54,33 L71,43 Z" />
+</vector>

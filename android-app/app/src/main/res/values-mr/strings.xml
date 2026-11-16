@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ग्रामसेतू</string>
+    <string name="app_subtitle">अधिकृत ग्रामपंचायत डिजिटल पोर्टल</string>
+    <string name="loading">ग्रामसेतू लोड होत आहे...</string>
+    <string name="offline_title">इंटरनेट संपर्क उपलब्ध नाही</string>
+    <string name="offline_message">ग्रामसेतू सर्व्हरशी संपर्क होऊ शकला नाही. कृपया तुमचे इंटरनेट किंवा वाय-फाय कनेक्शन तपासा आणि \'पुन्हा प्रयत्न करा\' बटण दाबा.</string>
+    <string name="retry_button">पुन्हा प्रयत्न करा</string>
+    <string name="exit_confirm_title">अ‍ॅप बंद करा</string>
+    <string name="exit_confirm_message">तुम्हाला खात्री आहे का की तुम्हाला ग्रामसेतू अ‍ॅप बंद करायचे आहे?</string>
+    <string name="yes">होय</string>
+    <string name="no">नाही</string>
+    <string name="downloading_file">कागदपत्र डाउनलोड होत आहे...</string>
+    <string name="download_complete">डाउनलोड पूर्ण झाले</string>
+    <string name="download_failed">डाउनलोड अयशस्वी</string>
+    <string name="external_link_warning">बाह्य शासकीय पोर्टल ब्राउझरमध्ये उघडत आहे</string>
+    <string name="select_file">फाइल निवडा</string>
+    <string name="permission_denied">डाउनलोड करण्यासाठी परवानगी आवश्यक आहे</string>
+</resources>

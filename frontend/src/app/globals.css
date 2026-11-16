@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+:root {
+  /* Official Light Theme (Default Government Palette) */
+  --bg-primary: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-muted: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --border-primary: #cbd5e1;
+  --border-muted: #e2e8f0;
+  
+  /* Indian Government Brand Accents */
+  --brand-navy: #1e3a8a;      /* Deep Ashoka Blue */
+  --brand-navy-dark: #172554;
+  --brand-saffron: #d97706;   /* Saffron Accent */
+  --brand-saffron-light: #fef3c7;
+  --brand-green: #15803d;     /* Deep Flag Green */
+  --brand-green-light: #dcfce7;
+  
+  /* Alert Severities */
+  --alert-info-bg: #eff6ff;
+  --alert-info-text: #1e40af;
+  --alert-info-border: #93c5fd;
+  --alert-warning-bg: #fffbeb;
+  --alert-warning-text: #92400e;
+  --alert-warning-border: #fcd34d;
+  --alert-danger-bg: #fef2f2;
+  --alert-danger-text: #991b1b;
+  --alert-danger-border: #fca5a5;
+
+  /* Focus Indicator for WCAG 2.2 AA */
+  --focus-ring: #2563eb;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg-primary: #0b1120;
+  --bg-surface: #1e293b;
+  --bg-muted: #0f172a;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --border-primary: #334155;
+  --border-muted: #1e293b;
+  
+  --brand-navy: #3b82f6;
+  --brand-navy-dark: #1d4ed8;
+  --brand-saffron: #f59e0b;
+  --brand-saffron-light: #78350f;
+  --brand-green: #22c55e;
+  --brand-green-light: #14532d;
+  
+  --alert-info-bg: #172554;
+  --alert-info-text: #93c5fd;
+  --alert-info-border: #1d4ed8;
+  --alert-warning-bg: #451a03;
+  --alert-warning-text: #fcd34d;
+  --alert-warning-border: #b45309;
+  --alert-danger-bg: #450a0a;
+  --alert-danger-text: #fca5a5;
+  --alert-danger-border: #b91c1c;
+
+  --focus-ring: #60a5fa;
+}
+
+/* GIGW High Contrast Mode (Yellow on Black, White Borders, Ratio > 7:1) */
+[data-theme="contrast"] {
+  --bg-primary: #000000;
+  --bg-surface: #000000;
+  --bg-muted: #111111;
+  --text-primary: #ffff00;
+  --text-secondary: #ffffff;
+  --text-muted: #ffff00;
+  --border-primary: #ffffff;
+  --border-muted: #ffffff;
+  
+  --brand-navy: #00ffff;
+  --brand-navy-dark: #00dddd;
+  --brand-saffron: #ffff00;
+  --brand-saffron-light: #000000;
+  --brand-green: #00ff00;
+  --brand-green-light: #000000;
+  
+  --alert-info-bg: #000000;
+  --alert-info-text: #00ffff;
+  --alert-info-border: #00ffff;
+  --alert-warning-bg: #000000;
+  --alert-warning-text: #ffff00;
+  --alert-warning-border: #ffff00;
+  --alert-danger-bg: #000000;
+  --alert-danger-text: #ff5555;
+  --alert-danger-border: #ff5555;
+
+  --focus-ring: #ffff00;
+}
+
+/* Font Size Scaling (GIGW Text Resizing) */
+html[data-font-size="small"] {
+  font-size: 14px;
+}
+html[data-font-size="normal"] {
+  font-size: 16px;
+}
+html[data-font-size="large"] {
+  font-size: 18px;
+}
+html[data-font-size="x-large"] {
+  font-size: 20px;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* WCAG 2.2 AA Focus Visibility */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Skip link styling */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  z-index: 100;
+  background-color: var(--brand-navy);
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  border-radius: 0.25rem;
+  transition: top 0.2s ease-in-out;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+/* High contrast mode element outline overrides */
+[data-theme="contrast"] * {
+  border-color: var(--border-primary) !important;
+}
+
+/* Print Styles for Official Records */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt !important;
+  }
+}
