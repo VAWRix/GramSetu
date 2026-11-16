@@ -1,0 +1,18 @@
+# ==============================================================================
+# GramSetu - Daily Backup Systemd Service Unit Template
+# File: /etc/systemd/system/gramsetu-backup.service
+# ==============================================================================
+
+[Unit]
+Description=GramSetu Automated Daily Database Backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=gramsetu
+Group=gramsetu
+WorkingDirectory=/var/www/gramsetu
+EnvironmentFile=/etc/gramsetu/production.env
+ExecStart=/var/www/gramsetu/.venv/bin/python scripts/backup.py
+StandardOutput=journal
+StandardError=journal

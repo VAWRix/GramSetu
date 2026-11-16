@@ -1,0 +1,33 @@
+# ==============================================================================
+# GramSetu - Django Gunicorn Backend Systemd Service Unit Template
+# File: /etc/systemd/system/gramsetu-backend.service
+# ==============================================================================
+
+[Unit]
+Description=GramSetu Django Gunicorn WSGI Service
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=notify
+User=gramsetu
+Group=gramsetu
+WorkingDirectory=/var/www/gramsetu
+EnvironmentFile=/etc/gramsetu/production.env
+ExecStart=/var/www/gramsetu/.venv/bin/gunicorn \
+    -c config/gunicorn.conf.py \
+    config.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=30
+Restart=always
+RestartSec=5
+
+# Hardening Directives
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

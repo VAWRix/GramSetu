@@ -1,4 +1,10 @@
-# Python
+# ==============================================================================
+# GramSetu — Official Git Ignore Configuration
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Python & Virtual Environments
+# ------------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -21,29 +27,43 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual Environment
+# Virtual Environments
 .venv/
 venv/
 ENV/
 env/
 
-# Environment Variables & Secrets
+# ------------------------------------------------------------------------------
+# 2. Environment Variables & Credentials (CRITICAL SECURITY)
+# ------------------------------------------------------------------------------
 .env
 .env.local
 .env.*.local
+.env.development
+.env.test
+.env.production
 *.key
 *.pem
 *.cert
+*.crt
+*.pfx
+*.p12
 
-# Django
+# ------------------------------------------------------------------------------
+# 3. Django Local Development & Media Storage
+# ------------------------------------------------------------------------------
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
 media/
 staticfiles/
+private_docs/
+private_media/
 
-# Database Backups & Dumps
+# ------------------------------------------------------------------------------
+# 4. Database Backups & Dumps
+# ------------------------------------------------------------------------------
 backups/
 *.dump
 *.dump.tmp
@@ -51,7 +71,9 @@ backups/
 *.tar.gz
 *.sha256
 
-# Testing & Coverage
+# ------------------------------------------------------------------------------
+# 5. Testing, QA & Automation Artifacts
+# ------------------------------------------------------------------------------
 .coverage
 .coverage.*
 htmlcov/
@@ -59,8 +81,45 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+demo-results.json
 
-# Editors & OS
+# ------------------------------------------------------------------------------
+# 6. Node.js & Next.js Framework
+# ------------------------------------------------------------------------------
+node_modules/
+.next/
+out/
+.pnp
+.pnp.js
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+.turbo/
+
+# ------------------------------------------------------------------------------
+# 7. Android Application & Gradle Build Files
+# ------------------------------------------------------------------------------
+.gradle/
+android-app/.gradle/
+android-app/.kotlin/
+android-app/build/
+android-app/**/build/
+android-app/local.properties
+android-app/.idea/
+android-app/*.iml
+android-app/**/.cxx/
+android-app/**/captures/
+android-app/**/output-metadata.json
+*.apk
+*.aab
+
+# ------------------------------------------------------------------------------
+# 8. IDEs, Editors & OS Metadata
+# ------------------------------------------------------------------------------
 .vscode/
 .idea/
 *.swp
@@ -68,3 +127,11 @@ coverage.xml
 *~
 .DS_Store
 Thumbs.db
+desktop.ini
+*.tmp
+
+# ------------------------------------------------------------------------------
+# 9. Internal Academic Audit & Working Documents
+# ------------------------------------------------------------------------------
+audit_archive/
+GRAMSETU_*.md

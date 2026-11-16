@@ -1,0 +1,12 @@
+# ==============================================================================
+# GramSetu - Production Python Dependencies (Linux Host Deployment)
+# Extends base requirements.txt for Linux production application servers
+# ==============================================================================
+
+-r requirements.txt
+
+# Production WSGI Application Server (Unix/Linux only)
+gunicorn==23.0.0
+
+# Optional production static asset serving middleware for standalone Django
+whitenoise==6.8.2

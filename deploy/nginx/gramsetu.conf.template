@@ -1,0 +1,210 @@
+# ==============================================================================
+# GramSetu - Production Nginx Reverse Proxy Configuration Template
+# Target: Production Linux Host (Ubuntu 24.04 LTS)
+# File: /etc/nginx/sites-available/gramsetu.conf
+# Symlink: /etc/nginx/sites-enabled/gramsetu.conf
+# ==============================================================================
+#
+# ARCHITECTURE OVERVIEW:
+# - Unified single-origin domain (e.g., https://gramsetu.gov.in)
+# - Next.js Public Portal & CMS Frontend on 127.0.0.1:3000
+# - Django REST API & Protected File Delivery (Gunicorn) on 127.0.0.1:8000
+# - Direct static asset delivery by Nginx for high throughput
+# - Zero direct access to private storage directories (enforced at web server layer)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Rate Limiting Zones (DDoS and Brute-Force Mitigation)
+# ------------------------------------------------------------------------------
+# General public API rate limit: 30 requests/second per client IP
+limit_req_zone $binary_remote_addr zone=gramsetu_api:10m rate=30r/s;
+
+# Sensitive authentication rate limit (login/MFA): 5 requests/minute per client IP
+limit_req_zone $binary_remote_addr zone=gramsetu_auth:10m rate=5r/m;
+
+# ------------------------------------------------------------------------------
+# Upstream Application Servers
+# ------------------------------------------------------------------------------
+upstream django_backend {
+    server 127.0.0.1:8000 fail_timeout=0;
+    keepalive 32;
+}
+
+upstream nextjs_frontend {
+    server 127.0.0.1:3000 fail_timeout=0;
+    keepalive 32;
+}
+
+# ------------------------------------------------------------------------------
+# HTTP (Port 80) -> HTTPS (Port 443) Permanent Redirection
+# ------------------------------------------------------------------------------
+server {
+    listen 80;
+    listen [::]:80;
+    server_name example.gramsetu.gov.in www.example.gramsetu.gov.in;
+
+    # Allow ACME Let's Encrypt certificate renewal challenges
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        allow all;
+    }
+
+    # Redirect all other HTTP requests to HTTPS with 301
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ------------------------------------------------------------------------------
+# HTTPS (Port 443) Main Application Server
+# ------------------------------------------------------------------------------
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name example.gramsetu.gov.in www.example.gramsetu.gov.in;
+
+    # --------------------------------------------------------------------------
+    # SSL/TLS Configuration (Modern Standard - TLS 1.2 and 1.3 only)
+    # --------------------------------------------------------------------------
+    ssl_certificate /etc/letsencrypt/live/example.gramsetu.gov.in/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.gramsetu.gov.in/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/example.gramsetu.gov.in/chain.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384';
+    ssl_prefer_server_ciphers off;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:GramSetuSSL:10m;
+    ssl_session_tickets off;
+
+    # OCSP Stapling
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    resolver 1.1.1.1 8.8.8.8 valid=300s;
+    resolver_timeout 5s;
+
+    # --------------------------------------------------------------------------
+    # Security Headers (Statutory GIGW 3.0 & OWASP Top 10 Compliance)
+    # --------------------------------------------------------------------------
+    # HSTS: 1-year strict transport security
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    # --------------------------------------------------------------------------
+    # Request Limits & Timeouts
+    # --------------------------------------------------------------------------
+    # 55MB allows 50MB document uploads with multipart overhead
+    client_max_body_size 55M;
+    client_body_buffer_size 1M;
+    client_header_buffer_size 4k;
+    large_client_header_buffers 4 16k;
+
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+    send_timeout 60s;
+
+    # --------------------------------------------------------------------------
+    # Static Assets (Served Directly by Nginx)
+    # --------------------------------------------------------------------------
+    # Django static files (Admin, OTP, CSS/JS)
+    location /static/ {
+        alias /var/www/gramsetu/staticfiles/;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+        access_log off;
+    }
+
+    # Next.js static assets
+    location /_next/static/ {
+        alias /var/www/gramsetu/frontend/.next/static/;
+        expires 365d;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        access_log off;
+    }
+
+    # Favicon and Robots
+    location = /favicon.ico {
+        alias /var/www/gramsetu/frontend/public/favicon.ico;
+        access_log off;
+        log_not_found off;
+    }
+
+    location = /robots.txt {
+        alias /var/www/gramsetu/frontend/public/robots.txt;
+        access_log off;
+        log_not_found off;
+    }
+
+    # --------------------------------------------------------------------------
+    # Private Storage Protection (CRITICAL: Block Direct Disk Access)
+    # --------------------------------------------------------------------------
+    # Ensure neither documents nor gallery items can ever be accessed directly
+    # bypassing Django's authentication and permission checks.
+    location ~* ^/(private_docs|private_media)/ {
+        return 404;
+    }
+
+    # --------------------------------------------------------------------------
+    # Django Backend Endpoints (APIs, Admin, Protected File Streaming)
+    # --------------------------------------------------------------------------
+    # Route all /api/, /admin/, /documents/, and /gallery/ to Gunicorn
+    location ~ ^/(api|admin|documents|events|schemes|gallery|search|health|ready)/ {
+        # Apply general rate limiting
+        limit_req zone=gramsetu_api burst=20 nodelay;
+
+        proxy_pass http://django_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+
+        proxy_redirect off;
+        proxy_buffering on;
+    }
+
+    # Specific rate limiting on administrative login & MFA endpoints
+    location ~ ^/api/auth/(login|mfa)/ {
+        limit_req zone=gramsetu_auth burst=5 nodelay;
+
+        proxy_pass http://django_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # --------------------------------------------------------------------------
+    # Next.js Frontend (Public Portal & CMS UI)
+    # --------------------------------------------------------------------------
+    # Route all other traffic to Next.js
+    location / {
+        proxy_pass http://nextjs_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # --------------------------------------------------------------------------
+    # Logging Configuration
+    # --------------------------------------------------------------------------
+    access_log /var/log/nginx/gramsetu_access.log combined buffer=16k;
+    error_log /var/log/nginx/gramsetu_error.log warn;
+}

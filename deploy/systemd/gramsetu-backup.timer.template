@@ -1,0 +1,17 @@
+# ==============================================================================
+# GramSetu - Daily Backup Systemd Timer Template
+# File: /etc/systemd/system/gramsetu-backup.timer
+# Triggers daily at 02:00 IST (Indian Standard Time: UTC 20:30)
+# ==============================================================================
+
+[Unit]
+Description=Run GramSetu Daily Database Backup at 02:00 IST
+Requires=gramsetu-backup.service
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

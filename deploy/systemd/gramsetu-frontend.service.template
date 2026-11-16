@@ -1,0 +1,29 @@
+# ==============================================================================
+# GramSetu - Next.js Production Frontend Systemd Service Unit Template
+# File: /etc/systemd/system/gramsetu-frontend.service
+# ==============================================================================
+
+[Unit]
+Description=GramSetu Next.js Frontend Service
+After=network.target gramsetu-backend.service
+
+[Service]
+Type=simple
+User=gramsetu
+Group=gramsetu
+WorkingDirectory=/var/www/gramsetu/frontend
+EnvironmentFile=/etc/gramsetu/production.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+
+# Hardening Directives
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
